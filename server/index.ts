@@ -205,10 +205,13 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
   console.log('[Zapier] Submission webhook sent for:', data.name)
 }
 
-// ─── Server Start ─────────────────────────────────────────────────────────────
+// ─── Export for Vercel serverless ────────────────────────────────────────────
+export default app
+
+// ─── Server Start (local dev only) ───────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, async () => {
+if (!process.env.VERCEL) app.listen(PORT, async () => {
   console.log(`\n🌊 Blue Pacific Window Cleaning — Estimate Server`)
   console.log(`   Port: ${PORT}`)
   console.log(`   Cloud storage (R2/S3): ${isStorageConfigured() ? '✅ ENABLED' : '⚠️  DISABLED (using in-memory fallback)'}`)
