@@ -1,5 +1,5 @@
 import { CheckCircle2, Phone, Clock, MessageSquare } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from 'A/components/ui/button'
 
 export default function Confirmation() {
   const handleCall = () => {
@@ -18,7 +18,7 @@ export default function Confirmation() {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
           <img
-            src="https://users-db-dev.idealane.dev/assets/49e5604b-3f33-4f47-a7d9-94a9d875e7dc/a0a3e651-6174-48fb-be42-397709badca7"
+            src="/logo.png"
             alt="Blue Pacific Window Cleaning"
             className="h-10 w-auto"
           />
