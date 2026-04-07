@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Camera, Phone, MessageSquare } from 'lucide-react'
+import { Camera, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,10 +14,6 @@ export default function WelcomeScreen({ onNext }: Props) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
-
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
 
   const handleSendText = async () => {
     if (!phone.trim()) return
@@ -64,7 +60,7 @@ export default function WelcomeScreen({ onNext }: Props) {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
           <img
-            src="https://users-db-dev.idealane.dev/assets/49e5604b-3f33-4f47-a7d9-94a9d875e7dc/a0a3e651-6174-48fb-be42-397709badca7"
+            src="/logo.png"
             alt="Blue Pacific Window Cleaning"
             className="h-12 w-auto"
           />
@@ -116,17 +112,6 @@ export default function WelcomeScreen({ onNext }: Props) {
                 </div>
               </Button>
 
-              <div className="pt-2">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="w-full h-12 text-base border-2 border-sky-300 text-sky-700 hover:bg-sky-50 rounded-xl"
-                  onClick={handleCall}
-                >
-                  <Phone className="w-5 h-5 mr-2" />
-                  Call Us Instead
-                </Button>
-              </div>
             </div>
           ) : (
             <div className="bg-white rounded-xl border-2 border-sky-200 p-6 shadow-lg">
