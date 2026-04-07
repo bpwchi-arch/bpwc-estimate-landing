@@ -1,8 +1,8 @@
 import { Camera, FileCheck, MessageSquare, Phone, ArrowLeft } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from 'A/components/ui/button'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Label } from 'A/components/ui/label'
 
 type Props = {
   onNext: () => void
@@ -64,7 +64,7 @@ export default function HowItWorks({ onNext, onBack }: Props) {
             <ArrowLeft className="w-6 h-6" />
           </button>
           <img 
-            src="https://users-db-dev.idealane.dev/assets/49e5604b-3f33-4f47-a7d9-94a9d875e7dc/a0a3e651-6174-48fb-be42-397709badca7" 
+            src="/logo.png" 
             alt="Blue Pacific Window Cleaning"
             className="h-10 w-auto"
           />
@@ -229,5 +229,6 @@ export default function HowItWorks({ onNext, onBack }: Props) {
         </div>
       </footer>
     </div>
-  )
-}
+  
+( }
+
