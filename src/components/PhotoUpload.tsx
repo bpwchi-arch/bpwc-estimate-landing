@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Camera, X, Phone, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from 'A/components/ui/button'
 import type { EstimateData } from '@/pages/EstimateFlow'
 
 type Props = {
@@ -160,7 +160,7 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
             <ArrowLeft className="w-6 h-6" />
           </button>
           <img
-            src="https://users-db-dev.idealane.dev/assets/49e5604b-3f33-4f47-a7d9-94a9d875e7dc/a0a3e651-6174-48fb-be42-397709badca7"
+            src="/logo.png"
             alt="Blue Pacific Window Cleaning"
             className="h-10 w-auto"
           />
