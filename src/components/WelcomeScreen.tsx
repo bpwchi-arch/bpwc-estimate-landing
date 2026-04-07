@@ -62,7 +62,7 @@ export default function WelcomeScreen({ onNext }: Props) {
           <img
             src="/logo.png"
             alt="Blue Pacific Window Cleaning"
-            className="h-12 w-auto"
+                        className="h-16 w-auto object-contain flex-shrink-0"
           />
           <div>
             <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
