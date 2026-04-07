@@ -1,5 +1,5 @@
 import { CheckCircle2, Phone, Clock, MessageSquare } from 'lucide-react'
-import { Button } from 'A/components/ui/button'
+import { Button } from '@/components/ui/button'
 
 export default function Confirmation() {
   const handleCall = () => {
