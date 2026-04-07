@@ -77,7 +77,7 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
             <ArrowLeft className="w-6 h-6" />
           </button>
           <img
-            src="https://users-db-dev.idealane.dev/assets/49e5604b-3f33-4f47-a7d9-94a9d875e7dc/a0a3e651-6174-48fb-be42-397709badca7"
+            src="/logo.png"
             alt="Blue Pacific Window Cleaning"
             className="h-10 w-auto"
           />
@@ -112,11 +112,11 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
                     <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
                       selected ? 'border-sky-500 bg-sky-500' : 'border-sky-300'
                     }`}>
-                      {selected && (
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
+                     {selected && (
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      )+e
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -197,5 +197,6 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
         </div>
       </footer>
     </div>
-  )
-}
+  
+( }
+
