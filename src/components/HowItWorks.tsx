@@ -1,8 +1,8 @@
 import { Camera, FileCheck, MessageSquare, Phone, ArrowLeft } from 'lucide-react'
-import { Button } from 'A/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
-import { Label } from 'A/components/ui/label'
+import { Label } from '@/components/ui/label'
 
 type Props = {
   onNext: () => void
@@ -229,6 +229,6 @@ export default function HowItWorks({ onNext, onBack }: Props) {
         </div>
       </footer>
     </div>
-  
-( }
+  )
+}
 
