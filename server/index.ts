@@ -73,40 +73,33 @@ app.post('/api/send-estimate-link', async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Phone number is required' })
 
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '')
-    const estimateUrl = process.env.ESTIMATE_URL || 'https://49e5604b-3f33-4f47-a7d9-94a9d875e7dc.preview-dev.idealane.dev'
-    const message = `Blue Pacific Window Cleaning - Get your estimate:\n\n${estimateUrl}\n\nJust snap a few photos of your home and we'll send you pricing within 24 hours. Mahalo! 🌺`
+    const estimateUrl = process.env.ESTIMATE_URL || 'https://bpwc-estimate-landing.vercel.app'
+    const message = `Hey this is Blue Pacific 🤙 Here's your estimate link:\n\n${estimateUrl}\n\nEasiest way to get an estimate is just send a few photos — you can either open the link above OR just reply to this text with your photos directly:\n\n• Walk around the outside and snap a photo of each section of the home\n• Any windows you can't see from outside, just grab from inside\n\nMost customers finish this in under 2 minutes 👍\n\nDoesn't have to be perfect — just enough for us to see\n\nIMPORTANT: Send photos one at a time so they come through properly\n\nPhotos are the fastest way to get you an accurate quote and get you on the schedule right away\n\nWalkthroughs are only used when photos aren't possible and may delay scheduling — if you need one, just reply "walkthrough" or "call" 👍`
 
-    let sent = false
-
-    // Primary: Zapier webhook
+    // Send via Zapier → Quo webhook
     const zapierUrl = process.env.ZAPIER_SMS_WEBHOOK || 'https://hooks.zapier.com/hooks/catch/14536948/uer2igu/'
+    const payload = {
+      phone: cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`,
+      message,
+      timestamp: new Date().toISOString()
+    }
+
+    let zapierResponseBody = ''
     try {
-      const payload = {
-        phone: cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`,
-        message,
-        timestamp: new Date().toISOString()
-      }
       const response = await fetch(zapierUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      if (response.ok) {
-        console.log('[SMS] Sent via Zapier webhook for:', cleanPhone)
-        sent = true
-      } else {
-        console.warn('[SMS] Zapier webhook returned', response.status, '— trying ClickSend fallback')
+      zapierResponseBody = await response.text().catch(() => '')
+      if (!response.ok) {
+        console.error('[SMS] Zapier webhook returned', response.status, zapierResponseBody)
+        return res.status(502).json({ error: `Zapier webhook error: ${response.status}`, details: zapierResponseBody })
       }
+      console.log('[SMS] Dispatched via Zapier/Quo for:', cleanPhone, '| response:', zapierResponseBody)
     } catch (err) {
-      console.warn('[SMS] Zapier webhook failed:', err, '— trying ClickSend fallback')
-    }
-
-    // Fallback: Twilio direct
-    if (!sent) {
-      sent = await sendSmsViaClickSend(cleanPhone, message)
-      if (!sent) {
-        return res.status(500).json({ error: 'Failed to send SMS — both Zapier/Quo and ClickSend unavailable' })
-      }
+      console.error('[SMS] Zapier webhook threw:', err)
+      return res.status(502).json({ error: 'Failed to reach Zapier webhook', details: err instanceof Error ? err.message : String(err) })
     }
 
     res.json({ success: true, message: 'Text sent successfully' })
