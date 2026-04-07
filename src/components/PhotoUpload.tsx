@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Camera, X, Phone, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
-import { Button } from 'A/components/ui/button'
+import { Button } from '@/components/ui/button'
 import type { EstimateData } from '@/pages/EstimateFlow'
 
 type Props = {
