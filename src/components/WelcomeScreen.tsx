@@ -12,7 +12,7 @@ export default function WelcomeScreen({ onNext }: Props) {
   const [showTextForm, setShowTextForm] = useState(false)
   const [phone, setPhone] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false
+  const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
 
   const handleSendText = async () => {
