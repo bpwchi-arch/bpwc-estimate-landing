@@ -12,7 +12,7 @@ export default function WelcomeScreen({ onNext }: Props) {
   const [showTextForm, setShowTextForm] = useState(false)
   const [phone, setPhone] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState(false
   const [error, setError] = useState('')
 
   const handleSendText = async () => {
@@ -59,13 +59,11 @@ export default function WelcomeScreen({ onNext }: Props) {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <div style={{ width: '145px', height: '52px', overflow: 'hidden', flexShrink: 0 }}>
-            <img
-              src="/logo.png"
-              alt="Blue Pacific Window Cleaning"
-              style={{ height: '116px', width: 'auto', marginTop: '-32px' }}
-            />
-          </div>
+          <img
+                        src="/logo.png"
+                        alt="Blue Pacific Window Cleaning"
+                        className="h-16 w-auto object-contain flex-shrink-0"
+                      />
           <div>
             <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
             <p className="text-sm text-sky-700">Proudly serving homes across Oʻahu</p>
