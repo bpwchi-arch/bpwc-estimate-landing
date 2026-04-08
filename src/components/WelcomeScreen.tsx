@@ -59,11 +59,13 @@ export default function WelcomeScreen({ onNext }: Props) {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <img
-                        src="/logo.png"
-                        alt="Blue Pacific Window Cleaning"
-                        className="h-16 w-auto object-contain flex-shrink-0"
-                      />
+          <div style={{ width: '146px', height: '50px', overflow: 'hidden', flexShrink: 0 }}>
+            <img
+              src="/logo.png"
+              alt="Blue Pacific Window Cleaning"
+              style={{ height: '116px', width: 'auto', marginTop: '-33px' }}
+            />
+          </div>
           <div>
             <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
             <p className="text-sm text-sky-700">Proudly serving homes across Oʻahu</p>
@@ -111,7 +113,6 @@ export default function WelcomeScreen({ onNext }: Props) {
                   </div>
                 </div>
               </Button>
-
             </div>
           ) : (
             <div className="bg-white rounded-xl border-2 border-sky-200 p-6 shadow-lg">
