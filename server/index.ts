@@ -183,13 +183,87 @@ app.post('/api/submit-estimate', async (req, res) => {
 
 async function sendToZapier(data: SubmissionData): Promise<void> {
   const webhookUrl = process.env.ZAPIER_SUBMIT_WEBHOOK || 'https://hooks.zapier.com/hooks/catch/14536948/uerttj9/'
+
+  // Build a human-readable photo list (numbered, one per line)
+  const photoListText = data.photoUrls
+    .map((url, i) => `Photo ${i + 1}: ${url}`)
+    .join('\n')
+
+  // Individual photo URL fields for easy Zapier field mapping
+  const photoFields: Record<string, string> = {}
+  data.photoUrls.forEach((url, i) => {
+    photoFields[`photo_${i + 1}`] = url
+  })
+
+  // Plain-text formatted summary for email body / Zapier steps
+  const serviceLabel = data.services === 'windows' ? 'Window Cleaning' : data.services
+  const windowPref = data.windowService === 'interior-exterior' ? 'Interior + Exterior'
+    : data.windowService === 'exterior-only' ? 'Exterior Only'
+    : data.windowService || ''
+
+  const submittedHST = new Date(data.submittedAt).toLocaleString('en-US', {
+    timeZone: 'Pacific/Honolulu',
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  })
+
+  const summaryText = [
+    `New Estimate Request — ${data.name}`,
+    ``,
+    `Name:     ${data.name}`,
+    `Phone:    ${data.phone}`,
+    `Email:    ${data.email || 'Not provided'}`,
+    `Address:  ${data.address || 'Not provided'}`,
+    `Service:  ${serviceLabel}`,
+    windowPref ? `Windows:  ${windowPref}` : '',
+    data.notes ? `Notes:    ${data.notes}` : '',
+    ``,
+    `Photos (${data.photoCount}):`,
+    photoListText,
+    ``,
+    `Submitted: ${submittedHST} HST`
+  ].filter(line => line !== undefined && !(line === '' && false)).join('\n')
+
+  const payload = {
+    // Clean individual fields — easy to map in Zapier
+    first_name: data.firstName,
+    last_name: data.lastName,
+    name: data.name,
+    phone: data.phone,
+    email: data.email,
+    customer_email: data.email,   // alias — some Zap steps look for this
+    address: data.address || '',
+    service: serviceLabel,
+    window_preference: windowPref,
+    notes: data.notes || '',
+    photo_count: data.photoCount,
+    submitted_at: submittedHST + ' HST',
+
+    // Individual photo URLs (photo_1, photo_2, …)
+    ...photoFields,
+
+    // Full formatted text — paste directly into email body in Zapier
+    summary: summaryText,
+
+    // HTML version for Zapier email steps
+    summary_html: `
+<table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;max-width:600px">
+  <tr><td style="padding:6px 12px 6px 0;color:#555;width:120px"><b>Name</b></td><td style="padding:6px 0">${data.name}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Phone</b></td><td style="padding:6px 0">${data.phone}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Email</b></td><td style="padding:6px 0">${data.email || '—'}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Address</b></td><td style="padding:6px 0">${data.address || '—'}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Service</b></td><td style="padding:6px 0">${serviceLabel}</td></tr>
+  ${windowPref ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Windows</b></td><td style="padding:6px 0">${windowPref}</td></tr>` : ''}
+  ${data.notes ? `<tr><td style="padding:6px 12px 6px 0;color:#555;vertical-align:top"><b>Notes</b></td><td style="padding:6px 0">${data.notes}</td></tr>` : ''}
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Photos</b></td><td style="padding:6px 0">${data.photoUrls.map((u, i) => `<a href="${u}">Photo ${i + 1}</a>`).join(' &nbsp;·&nbsp; ')}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Submitted</b></td><td style="padding:6px 0">${submittedHST} HST</td></tr>
+</table>`
+  }
+
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...data,
-      storageType: isStorageConfigured() ? 'cloud' : 'memory'
-    })
+    body: JSON.stringify(payload)
   })
   if (!response.ok) {
     const text = await response.text().catch(() => 'Unknown error')
