@@ -59,12 +59,9 @@ export default function WelcomeScreen({ onNext }: Props) {
 
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
-        <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <img src={LOGO_SRC} alt="Blue Pacific Window Cleaning" className="h-16 w-auto object-contain flex-shrink-0" />
-          <div>
-            <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
-            <p className="text-sm text-sky-700">Proudly serving homes across Oʻahu</p>
-          </div>
+        <div className="max-w-2xl mx-auto text-center">
+          <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
+          <p className="text-sm text-sky-700">Proudly serving homes across Oʻahu</p>
         </div>
       </header>
 
@@ -182,9 +179,10 @@ export default function WelcomeScreen({ onNext }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-6 px-4">
-        <div className="max-w-2xl mx-auto text-center text-sm text-sky-700">
-          <p>Detail-focused window cleaning for Oahu homes</p>
+      <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-8 px-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <img src={LOGO_SRC} alt="Blue Pacific Window Cleaning" className="h-24 w-auto object-contain mx-auto mb-3" />
+          <p className="text-sm text-sky-700">Detail-focused window cleaning for Oahu homes</p>
         </div>
       </footer>
     </div>
