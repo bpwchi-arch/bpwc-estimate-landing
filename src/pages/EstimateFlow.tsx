@@ -38,6 +38,10 @@ export default function EstimateFlow() {
 
   const nextStep = () => setStep(prev => prev + 1)
   const prevStep = () => setStep(prev => prev - 1)
+  const resetFlow = () => {
+    setStep(1)
+    setData({ services: [], photos: [], photoUrls: [], phone: '', name: '', address: '', email: '', windowService: '', notes: '' })
+  }
 
   return (
     <>
@@ -46,7 +50,7 @@ export default function EstimateFlow() {
       {step === 3 && <ServiceType data={data} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
       {step === 4 && <PhotoUpload data={data} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
       {step === 5 && <BasicInfo data={data} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
-      {step === 6 && <Confirmation />}
+      {step === 6 && <Confirmation onReset={resetFlow} />}
     </>
   )
 }

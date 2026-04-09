@@ -1,7 +1,11 @@
-import { CheckCircle2, Phone, Clock, MessageSquare } from 'lucide-react'
+import { CheckCircle2, Phone, Clock, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-export default function Confirmation() {
+type Props = {
+  onReset: () => void
+}
+
+export default function Confirmation({ onReset }: Props) {
   const handleCall = () => {
     window.location.href = 'tel:+18084577600'
   }
@@ -16,16 +20,9 @@ export default function Confirmation() {
 
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
-        <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <img
-            src="/logo.png"
-            alt="Blue Pacific Window Cleaning"
-            className="h-10 w-auto"
-          />
-          <div>
-            <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
-            <p className="text-xs text-sky-700">Serving Oʻahu</p>
-          </div>
+        <div className="max-w-2xl mx-auto text-center">
+          <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
+          <p className="text-xs text-sky-700">Serving Oʻahu</p>
         </div>
       </header>
 
@@ -71,19 +68,32 @@ export default function Confirmation() {
             </div>
           </div>
 
-          {/* CTA */}
-          <div className="bg-sky-50 rounded-xl border border-sky-200 p-6 text-center">
-            <p className="text-sky-900 font-medium mb-1">Have a question? Want to talk to someone right now?</p>
-            <p className="text-sky-700 text-sm mb-4">We're happy to help.</p>
+          {/* CTAs */}
+          <div className="space-y-3">
+            <div className="bg-sky-50 rounded-xl border border-sky-200 p-6 text-center">
+              <p className="text-sky-900 font-medium mb-1">Have a question? Want to talk to someone right now?</p>
+              <p className="text-sky-700 text-sm mb-4">We're happy to help.</p>
+              <Button
+                size="lg"
+                className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white rounded-xl"
+                onClick={handleCall}
+              >
+                <Phone className="w-5 h-5 mr-2" />
+                Call Us: (808) 457-7600
+              </Button>
+            </div>
+
             <Button
+              variant="outline"
               size="lg"
-              className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white rounded-xl"
-              onClick={handleCall}
+              className="w-full h-12 rounded-xl border-sky-200 text-sky-700 hover:bg-sky-50"
+              onClick={onReset}
             >
-              <Phone className="w-5 h-5 mr-2" />
-              Call Us: (808) 457-7600
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Start a New Estimate
             </Button>
           </div>
+
         </div>
       </main>
 

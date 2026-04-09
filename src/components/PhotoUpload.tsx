@@ -156,17 +156,12 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
-          <button onClick={onBack} className="text-sky-700 hover:text-sky-900 transition-colors">
+          <button onClick={onBack} className="text-sky-700 hover:text-sky-900 transition-colors flex-shrink-0">
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <img
-            src="/logo.png"
-            alt="Blue Pacific Window Cleaning"
-            className="h-10 w-auto"
-          />
           <div>
             <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
-            <p className="text-xs text-sky-700">Serving Oahu</p>
+            <p className="text-xs text-sky-700">Serving Oʻahu</p>
           </div>
         </div>
       </header>
