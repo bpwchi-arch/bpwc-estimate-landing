@@ -105,6 +105,7 @@ export default function WelcomeScreen({ onNext }: Props) {
                   </div>
                 </div>
               </Button>
+
             </div>
           ) : (
             <div className="bg-white rounded-xl border-2 border-sky-200 p-6 shadow-lg">
@@ -181,7 +182,11 @@ export default function WelcomeScreen({ onNext }: Props) {
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-8 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <img src={LOGO_SRC} alt="Blue Pacific Window Cleaning" style={{ height: '120px', width: 'auto', display: 'block', margin: '0 auto 12px' }} />
+          <img
+            src={LOGO_SRC}
+            alt="Blue Pacific Window Cleaning"
+            style={{ height: '80px', width: 'auto', display: 'block', margin: '0 auto 12px' }}
+          />
           <p className="text-sm text-sky-700">Detail-focused window cleaning for Oahu homes</p>
         </div>
       </footer>
