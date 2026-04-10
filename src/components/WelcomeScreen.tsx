@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Camera, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,10 +15,12 @@ export default function WelcomeScreen({ onNext }: Props) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const sendingRef = useRef(false)
 
   const handleSendText = async () => {
-    if (!phone.trim()) return
+    if (!phone.trim() || sendingRef.current) return
 
+    sendingRef.current = true
     setSending(true)
     setError('')
 
@@ -46,6 +48,7 @@ export default function WelcomeScreen({ onNext }: Props) {
       setError(err instanceof Error ? err.message : 'Failed to send text. Please try again.')
     } finally {
       setSending(false)
+    sendingRef.current = false
     }
   }
 
@@ -61,7 +64,7 @@ export default function WelcomeScreen({ onNext }: Props) {
       <header className="bg-white/80 backdrop-blur-sm border-b border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto text-center">
           <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
-          <p className="text-sm text-sky-700">Proudly serving homes across Oʻahu</p>
+          <p className="text-sm text-sky-700">Proudly serving homes across OÊ»ahu</p>
         </div>
       </header>
 
@@ -70,11 +73,11 @@ export default function WelcomeScreen({ onNext }: Props) {
         <div className="max-w-lg w-full">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold text-sky-950 mb-4 leading-tight">
-              Get a Fast Window Cleaning Estimate — No Site Visit Needed
+              Get a Fast Window Cleaning Estimate â No Site Visit Needed
             </h2>
             <p className="text-lg text-sky-800">
               Proudly serving homes across Oahu.<br />
-              Most customers just snap a few photos — we'll guide you through it 👍
+              Most customers just snap a few photos â we'll guide you through it ð
             </p>
           </div>
 
@@ -100,7 +103,7 @@ export default function WelcomeScreen({ onNext }: Props) {
                   <div className="text-left flex-1">
                     <div className="font-semibold text-base">Send This To My Phone</div>
                     <div className="text-sm text-sky-600 font-normal mt-0.5">
-                      On a desktop? Get the link on your phone to snap photos easily 👍
+                      On a desktop? Get the link on your phone to snap photos easily ð
                     </div>
                   </div>
                 </div>
@@ -167,10 +170,10 @@ export default function WelcomeScreen({ onNext }: Props) {
                     <MessageSquare className="w-8 h-8 text-green-600" />
                   </div>
                   <h3 className="text-xl font-semibold text-sky-950 mb-2">
-                    Text sent! 👍
+                    Text sent! ð
                   </h3>
                   <p className="text-sky-700">
-                    Check your phone — tap the link to get started
+                    Check your phone â tap the link to get started
                   </p>
                 </div>
               )}
