@@ -14,14 +14,14 @@ const SERVICE_OPTIONS = [
   {
     id: 'windows',
     label: 'Window Cleaning',
-    description: 'Interior, exterior, or both — we handle screens too',
-    emoji: '🪟'
+    description: 'Interior, exterior, or both -- we handle screens too',
+    emoji: ''
   },
   {
     id: 'pressure',
     label: 'Pressure Washing',
     description: 'Driveways, walkways, lanais, walls, and exterior surfaces',
-    emoji: '💧'
+    emoji: ''
   }
 ]
 
@@ -78,7 +78,7 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
           </button>
           <div>
             <h1 className="text-xl font-semibold text-sky-900">Blue Pacific Window Cleaning</h1>
-            <p className="text-xs text-sky-700">Serving Oʻahu</p>
+            <p className="text-xs text-sky-700">Serving Oahu</p>
           </div>
         </div>
       </header>
@@ -87,7 +87,7 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
       <main className="flex-1 px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-3xl font-bold text-sky-950 mb-2 text-center">What Can We Help With?</h2>
-          <p className="text-center text-sky-700 mb-8">Select everything that applies — you can always adjust later</p>
+          <p className="text-center text-sky-700 mb-8">Select everything that applies -- you can always adjust later</p>
 
           {/* Service Selection */}
           <div className="space-y-3 mb-8">
