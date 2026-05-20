@@ -73,6 +73,13 @@ app.post('/api/send-estimate-link', async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Phone number is required' })
 
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '')
+
+    // Capture this desktop->mobile handoff as a lead immediately (non-blocking) so we
+    // don't lose the person if they never return to complete the full estimate flow.
+    captureSendToPhoneLead(cleanPhone).catch(err =>
+      console.warn('[Lead] send_to_phone capture failed (non-fatal):', err)
+    )
+
     const estimateUrl = process.env.ESTIMATE_URL || 'https://bpwc-estimate-landing.vercel.app'
     const message = `Hey this is Blue Pacific 🤙 Here's your estimate link:\n\n${estimateUrl}\n\nEasiest way to get an estimate is just send a few photos — you can either open the link above OR just reply to this text with your photos directly:\n\n• Walk around the outside and snap a photo of each section of the home\n• Any windows you can't see from outside, just grab from inside\n\nMost customers finish this in under 2 minutes 👍\n\nDoesn't have to be perfect — just enough for us to see\n\nIMPORTANT: Send photos one at a time so they come through properly\n\nPhotos are the fastest way to get you an accurate quote and get you on the schedule right away\n\nWalkthroughs are only used when photos aren't possible and may delay scheduling — if you need one, just reply "walkthrough" or "call" 👍`
 
@@ -270,6 +277,55 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     throw new Error(`Zapier webhook failed: ${response.status} — ${text}`)
   }
   console.log('[Zapier] Submission webhook sent for:', data.name)
+}
+
+// ─── Send-to-Phone Lead Capture ───────────────────────────────────────────────
+// When a visitor taps "Send This To My Phone" they've shown real intent but have
+// not completed the full estimate. Fire a lightweight lead to Quo (via Zapier)
+// tagged source: 'send_to_phone' so these handoffs are not lost. Uses
+// ZAPIER_LEAD_WEBHOOK if set, otherwise falls back to the submit webhook — in
+// which case the receiving Zap should branch on `source` / `lead_type` so partial
+// leads are not treated as completed estimates.
+async function captureSendToPhoneLead(cleanPhone: string): Promise<void> {
+  const webhookUrl =
+    process.env.ZAPIER_LEAD_WEBHOOK ||
+    process.env.ZAPIER_SUBMIT_WEBHOOK ||
+    'https://hooks.zapier.com/hooks/catch/14536948/uerttj9/'
+
+  const phone = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`
+  const submittedHST = new Date().toLocaleString('en-US', {
+    timeZone: 'Pacific/Honolulu',
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  })
+
+  const payload = {
+    source: 'send_to_phone',
+    lead_type: 'partial',
+    name: '',
+    first_name: '',
+    last_name: '',
+    phone,
+    email: '',
+    address: '',
+    service: '',
+    window_preference: '',
+    notes: 'Lead from "Send This To My Phone" - estimate link texted; full form not yet completed.',
+    photo_count: 0,
+    submitted_at: submittedHST + ' HST',
+    summary: `Send-to-Phone lead (no photos yet)\n\nPhone: ${phone}\nSubmitted: ${submittedHST} HST`
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => 'Unknown error')
+    throw new Error(`Lead webhook failed: ${response.status} - ${text}`)
+  }
+  console.log('[Lead] send_to_phone lead captured for:', phone)
 }
 
 // ─── Export for Vercel serverless ────────────────────────────────────────────

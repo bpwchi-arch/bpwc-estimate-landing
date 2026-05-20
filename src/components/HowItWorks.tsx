@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { trackSendToPhone } from '@/lib/analytics'
+import ProgressIndicator from '@/components/ProgressIndicator'
 
 type Props = {
   onNext: () => void
@@ -15,10 +17,6 @@ export default function HowItWorks({ onNext, onBack }: Props) {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
-
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
 
   const handleSendText = async () => {
     if (!phone.trim()) return
@@ -78,6 +76,7 @@ export default function HowItWorks({ onNext, onBack }: Props) {
       {/* Main Content */}
       <main className="flex-1 px-4 py-12">
         <div className="max-w-2xl mx-auto">
+          <ProgressIndicator current={1} total={4} />
           <h2 className="text-3xl font-bold text-sky-950 mb-8 text-center">How It Works</h2>
 
           <div className="space-y-8 mb-12">
@@ -135,7 +134,7 @@ export default function HowItWorks({ onNext, onBack }: Props) {
                 size="lg" 
                 variant="outline"
                 className="w-full h-auto py-3 px-4 border-2 border-sky-300 text-sky-700 hover:bg-sky-50 rounded-xl"
-                onClick={() => setShowTextForm(true)}
+                onClick={() => { trackSendToPhone(); setShowTextForm(true) }}
               >
                 <div className="flex items-start gap-3 w-full">
                   <MessageSquare className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -147,6 +146,16 @@ export default function HowItWorks({ onNext, onBack }: Props) {
                   </div>
                 </div>
               </Button>
+
+              <p className="text-center text-sm text-sky-600 pt-1">
+                {"Rather just call? We're happy to help: "}
+                <a
+                  href="tel:+18082072939"
+                  className="font-medium text-sky-700 hover:text-sky-900 underline underline-offset-2"
+                >
+                  (808) 207-2939
+                </a>
+              </p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border-2 border-sky-200 p-6 shadow-lg">
@@ -219,13 +228,13 @@ export default function HowItWorks({ onNext, onBack }: Props) {
       {/* Footer Call Option */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <button 
-            onClick={handleCall}
+          <a
+            href="tel:+18082072939"
             className="text-sky-700 hover:text-sky-900 font-medium inline-flex items-center gap-2 transition-colors"
           >
             <Phone className="w-4 h-4" />
-            Call Us
-          </button>
+            Call Us: (808) 207-2939
+          </a>
         </div>
       </footer>
     </div>

@@ -5,6 +5,7 @@ import ServiceType from '@/components/ServiceType'
 import PhotoUpload from '@/components/PhotoUpload'
 import BasicInfo from '@/components/BasicInfo'
 import Confirmation from '@/components/Confirmation'
+import StickyCallButton from '@/components/StickyCallButton'
 
 export type EstimateData = {
   services: string[]
@@ -47,6 +48,9 @@ export default function EstimateFlow() {
       {step === 4 && <PhotoUpload data={data} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
       {step === 5 && <BasicInfo data={data} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
       {step === 6 && <Confirmation />}
+
+      {/* Persistent mobile-only call escape hatch during the in-flow steps */}
+      {step >= 2 && step <= 5 && <StickyCallButton />}
     </>
   )
 }

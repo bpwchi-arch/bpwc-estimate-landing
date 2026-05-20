@@ -1,11 +1,6 @@
 import { CheckCircle2, Phone, Clock, MessageSquare } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 export default function Confirmation() {
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-sky-50 to-white tropical-bg">
       <div className="palm-right"></div>
@@ -73,16 +68,23 @@ export default function Confirmation() {
 
           {/* CTA */}
           <div className="bg-sky-50 rounded-xl border border-sky-200 p-6 text-center">
-            <p className="text-sky-900 font-medium mb-1">Have a question? Want to talk to someone right now?</p>
+            <p className="text-sky-900 font-medium mb-1">Want a faster answer? Talk to someone right now.</p>
             <p className="text-sky-700 text-sm mb-4">We're happy to help.</p>
-            <Button
-              size="lg"
-              className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white rounded-xl"
-              onClick={handleCall}
+            <a
+              href="tel:+18082072939"
+              className="w-full h-12 inline-flex items-center justify-center bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-medium transition-colors"
             >
               <Phone className="w-5 h-5 mr-2" />
-              Call Us: (808) 457-7600
-            </Button>
+              Call Us: (808) 207-2939
+            </a>
+          </div>
+
+          {/* Maintenance plan upsell */}
+          <div className="mt-4 bg-white rounded-xl border border-sky-200 p-5 text-center shadow-sm">
+            <p className="text-sky-900 font-medium mb-1">Keep your views crystal clear year-round</p>
+            <p className="text-sky-700 text-sm">
+              Ask about our monthly maintenance plan -- most customers save 20% vs. one-time cleanings.
+            </p>
           </div>
         </div>
       </main>

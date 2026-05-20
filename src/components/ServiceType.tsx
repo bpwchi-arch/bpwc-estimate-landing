@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EstimateData } from '@/pages/EstimateFlow'
+import ProgressIndicator from '@/components/ProgressIndicator'
 
 type Props = {
   data: EstimateData
@@ -58,10 +59,6 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
     onNext()
   }
 
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-sky-50 tropical-bg">
       <div className="palm-right"></div>
@@ -86,6 +83,7 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
       {/* Main Content */}
       <main className="flex-1 px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          <ProgressIndicator current={2} total={4} />
           <h2 className="text-3xl font-bold text-sky-950 mb-2 text-center">What Can We Help With?</h2>
           <p className="text-center text-sky-700 mb-8">Select everything that applies -- you can always adjust later</p>
 
@@ -182,13 +180,13 @@ export default function ServiceType({ data, updateData, onNext, onBack }: Props)
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <button
-            onClick={handleCall}
+          <a
+            href="tel:+18082072939"
             className="text-sky-700 hover:text-sky-900 font-medium inline-flex items-center gap-2 transition-colors"
           >
             <Phone className="w-4 h-4" />
-            Call Us
-          </button>
+            Call Us: (808) 207-2939
+          </a>
         </div>
       </footer>
     </div>

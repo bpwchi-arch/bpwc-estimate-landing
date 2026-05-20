@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { EstimateData } from '@/pages/EstimateFlow'
+import { fireEstimateConversion, fireMetaLead } from '@/lib/analytics'
+import ProgressIndicator from '@/components/ProgressIndicator'
 
 type Props = {
   data: EstimateData
@@ -21,10 +23,6 @@ export default function BasicInfo({ data, updateData, onNext, onBack }: Props) {
   const [notes, setNotes] = useState(data.notes)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
 
   const validate = () => {
     if (!firstName.trim()) return 'Please enter your first name'
@@ -69,6 +67,10 @@ export default function BasicInfo({ data, updateData, onNext, onBack }: Props) {
       if (!response.ok) {
         throw new Error(result.error || result.details || 'Submission failed')
       }
+
+      // Conversion tracking — fires only after the submission webhook succeeds.
+      fireEstimateConversion()
+      fireMetaLead()
 
       updateData({
         phone: phone.trim(),
@@ -117,6 +119,7 @@ export default function BasicInfo({ data, updateData, onNext, onBack }: Props) {
       {/* Main Content */}
       <main className="flex-1 px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          <ProgressIndicator current={4} total={4} />
           <h2 className="text-3xl font-bold text-sky-950 mb-2 text-center">Almost Done!</h2>
           <p className="text-center text-sky-700 mb-8">We just need a few details to send you your estimate</p>
 
@@ -249,13 +252,13 @@ export default function BasicInfo({ data, updateData, onNext, onBack }: Props) {
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <button
-            onClick={handleCall}
+          <a
+            href="tel:+18082072939"
             className="text-sky-700 hover:text-sky-900 font-medium inline-flex items-center gap-2 transition-colors"
           >
             <Phone className="w-4 h-4" />
-            Call Us
-          </button>
+            Call Us: (808) 207-2939
+          </a>
         </div>
       </footer>
     </div>

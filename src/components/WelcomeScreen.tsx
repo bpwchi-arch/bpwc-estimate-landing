@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LOGO_SRC } from '../logoData'
+import { trackSendToPhone } from '@/lib/analytics'
 
 type Props = {
   onNext: () => void
@@ -96,7 +97,7 @@ export default function WelcomeScreen({ onNext }: Props) {
                 size="lg"
                 variant="outline"
                 className="w-full h-auto py-3 px-4 border-2 border-sky-300 text-sky-700 hover:bg-sky-50 rounded-xl"
-                onClick={() => setShowTextForm(true)}
+                onClick={() => { trackSendToPhone(); setShowTextForm(true) }}
               >
  <div className="flex items-start gap-3 w-full">
  <MessageSquare className="w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -109,6 +110,15 @@ export default function WelcomeScreen({ onNext }: Props) {
  </div>
  </Button>
 
+              <p className="text-center text-sm text-sky-600 pt-1">
+                Prefer to talk?{' '}
+                <a
+                  href="tel:+18082072939"
+                  className="font-medium text-sky-700 hover:text-sky-900 underline underline-offset-2"
+                >
+                  Call (808) 207-2939
+                </a>
+              </p>
  </div>
  ) : (
  <div className="bg-white rounded-xl border-2 border-sky-200 p-6 shadow-lg">

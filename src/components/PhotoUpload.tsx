@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Camera, X, Phone, ArrowLeft, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EstimateData } from '@/pages/EstimateFlow'
+import ProgressIndicator from '@/components/ProgressIndicator'
 
 type Props = {
   data: EstimateData
@@ -139,10 +140,6 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
     }
   }
 
-  const handleCall = () => {
-    window.location.href = 'tel:+18084577600'
-  }
-
   const hasPressureWashing = data.services.includes('pressure')
 
   return (
@@ -174,6 +171,7 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
       {/* Main Content */}
       <main className="flex-1 px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          <ProgressIndicator current={3} total={4} />
           <h2 className="text-3xl font-bold text-sky-950 mb-8 text-center">Show Us Your Home</h2>
 
           {/* Instructions */}
@@ -261,6 +259,18 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
             </div>
           </label>
 
+          {/* Call fallback — turns photo-upload abandons into phone leads */}
+          <p className="text-center text-sm text-sky-600 mb-6">
+            {"Don't have photos handy? "}
+            <a
+              href="tel:+18082072939"
+              className="font-medium text-sky-700 hover:text-sky-900 underline underline-offset-2"
+            >
+              Call us: (808) 207-2939
+            </a>
+            {" and we'll walk you through it."}
+          </p>
+
           {/* Photo Grid */}
           {photos.length > 0 && (
             <div className="mb-6">
@@ -334,13 +344,13 @@ export default function PhotoUpload({ data, updateData, onNext, onBack }: Props)
       {/* Footer Call Option */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-sky-100 py-4 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <button
-            onClick={handleCall}
+          <a
+            href="tel:+18082072939"
             className="text-sky-700 hover:text-sky-900 font-medium inline-flex items-center gap-2 transition-colors"
           >
             <Phone className="w-4 h-4" />
-            Call Us
-          </button>
+            Call Us: (808) 207-2939
+          </a>
         </div>
       </footer>
     </div>
