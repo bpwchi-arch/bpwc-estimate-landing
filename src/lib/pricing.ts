@@ -24,7 +24,7 @@
 
 export type ServiceLevel = 'full' | 'exterior'
 
-/* ────────────────────────────────────────────────────────────────────────────
+/* ───────────────────────────────────────────────────────────────────────────
  * RATE CARD — mirrors BPWC_BiddingCalculator_v4.1.xlsx
  * ──────────────────────────────────────────────────────────────────────────── */
 
@@ -304,3 +304,70 @@ export const MAINTENANCE_PLANS = [
   { id: 'gold', label: 'Every 3 months', discount: 0.15 },
   { id: 'platinum', label: 'Every 2 months', discount: 0.2 },
 ] as const
+
+/** The steepest discount on offer — drives the "save up to X%" headline. */
+export const MAX_PLAN_DISCOUNT = Math.max(
+  ...MAINTENANCE_PLANS.map((p) => p.discount)
+)
+
+/**
+ * Re-price an already-calculated quote under a maintenance plan.
+ *
+ * ⚠️  THE MINIMUM CHARGE STILL APPLIES.
+ *
+ * Controls!B43 covers travel, equipment and crew time for ANY visit, so a plan
+ * discount can never take a visit below it. Without this clamp the 20% plan
+ * would advertise $200 against a $250 job — a number BPWC would not honour.
+ * This is the same class of bug as the range-spread one Austin caught on
+ * 2026-08-24: any figure we PRINT below the minimum is wrong, no matter which
+ * multiplier produced it.
+ */
+export function planQuote(base: QuoteRange, discount: number): QuoteRange {
+  const factor = 1 - discount
+  const low = Math.max(PRICING.minimumCharge, round5(base.low * factor))
+  const high = Math.max(low, round5(base.high * factor))
+
+  return {
+    low,
+    high,
+    point: Math.max(PRICING.minimumCharge, base.point * factor),
+    /**
+     * The clamp ate the whole band, so there is no range left to show.
+     *
+     * Test the CLAMPED figures, not the raw ones. Austin's own house (12 ground
+     * + 12 second-floor + 2 slider panels, $250 – $315) at the 20% plan gives
+     * 315 × 0.8 = $252 — above the floor, so a raw test says "not at minimum" —
+     * but round5 pulls it to $250, which is exactly the low end. That rendered
+     * as "$250 – $250", which reads as a broken calculator.
+     */
+    atMinimum: high <= low,
+  }
+}
+
+/**
+ * Is there a plan discount worth showing this customer?
+ *
+ * Two ways the answer is no:
+ *  1. The job already prices at the minimum charge — it's a floor, not an
+ *     estimate, so there is nothing to take a percentage off.
+ *  2. Even the steepest plan clamps back up to the minimum.
+ *
+ * Case 1 is the subtle one. An at-minimum quote still carries a nominal `high`
+ * from the ±15% spread, so discounting it produced plan rows ABOVE the "$250"
+ * the customer was just shown — a price list where committing to more frequent
+ * service appeared to cost more. Never render the table in that state.
+ */
+export function planSavesMoney(base: QuoteRange): boolean {
+  if (base.atMinimum) return false
+  return planQuote(base, MAX_PLAN_DISCOUNT).high < base.high
+}
+
+/**
+ * Plan price for the comparison table. Same as formatRange, except a collapsed
+ * band shows as a flat "$250" rather than "Starting at $250" — inside a list of
+ * four cadences the reader is comparing numbers, not reading a headline.
+ */
+export function formatPlanRange(r: QuoteRange): string {
+  if (r.atMinimum) return `$${r.low.toLocaleString()}`
+  return formatRange(r)
+}
