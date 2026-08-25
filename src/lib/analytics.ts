@@ -39,6 +39,45 @@ export function fireMetaLead(): void {
 }
 
 /**
+ * Micro-event (not a conversion): user tapped a call button and was shown the
+ * "text photos instead" sheet. Measures call INTENT, which at BPWC's traffic
+ * volume accumulates far faster than actual conversions and is one of the few
+ * signals readable on a weekly basis.
+ */
+export function trackCallIntent(): void {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', 'call_intent', {
+      event_category: 'engagement',
+      event_label: 'call_sheet_opened',
+    })
+  }
+}
+
+/**
+ * Micro-event: user chose to text photos rather than dial. This is the path we
+ * actively want - the IVR's option 1 sends this same instruction text anyway,
+ * so texting skips a phone tree and gets photos moving sooner.
+ */
+export function trackTextPhotos(source: 'call_sheet' | 'form'): void {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', 'text_photos_click', {
+      event_category: 'engagement',
+      event_label: source,
+    })
+  }
+}
+
+/** Micro-event: user chose to dial anyway after seeing the sheet. */
+export function trackCallPlaced(): void {
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', 'call_placed', {
+      event_category: 'engagement',
+      event_label: 'from_call_sheet',
+    })
+  }
+}
+
+/**
  * Micro-event (not a conversion): user tapped "Send This To My Phone".
  * Used to understand how many desktop users hand off to mobile.
  */
