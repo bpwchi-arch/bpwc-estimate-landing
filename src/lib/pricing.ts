@@ -1,13 +1,15 @@
 /**
  * BPWC instant-estimate pricing.
  *
+ * ─────────────────────────────────────────────────────────────────────────────
  *  SOURCE OF TRUTH: BPWC_BiddingCalculator_v4.1.xlsx
  *
  *  Every rate below is copied from that workbook, with sheet/cell references so
  *  it can be re-checked whenever Austin updates it. This file is the only place
  *  the web app defines a price.
+ * ─────────────────────────────────────────────────────────────────────────────
  *
- *  EVERYTHING IS PRICED PER **PANE**, NEVER PER WINDOW.
+ *  ⚠️  EVERYTHING IS PRICED PER **PANE**, NEVER PER WINDOW.
  *
  *  Austin: "This is a super common miscommunication." A single window opening
  *  can be 1, 2, or 3 panes of glass. If a customer counts openings and we price
@@ -16,13 +18,15 @@
  *
  *  So the customer-facing UI must say PANES everywhere, and show a worked
  *  example. There is deliberately NO windows-to-panes conversion factor in this
- *  file - an earlier draft had one, and it was the single largest source of
+ *  file — an earlier draft had one, and it was the single largest source of
  *  error in the model. We ask for the unit we actually bill.
  */
 
 export type ServiceLevel = 'full' | 'exterior'
 
-/* RATE CARD - mirrors BPWC_BiddingCalculator_v4.1.xlsx */
+/* ────────────────────────────────────────────────────────────────────────────
+ * RATE CARD — mirrors BPWC_BiddingCalculator_v4.1.xlsx
+ * ──────────────────────────────────────────────────────────────────────────── */
 
 export const PRICING = {
   /**
@@ -31,34 +35,34 @@ export const PRICING = {
    */
   minimumCharge: 250,
 
-  /** Controls!B10 - first-time clean multiplier (was 1.2, bumped to 1.3). */
+  /** Controls!B10 — first-time clean multiplier (was 1.2, bumped to 1.3). */
   firstTimeMultiplier: 1.3,
 
-  /** Controls!B11 - exterior-only price as a share of Full Service. */
+  /** Controls!B11 — exterior-only price as a share of Full Service. */
   exteriorOnlyFactor: 0.7,
 
   /**
-   * Per-PANE rates by floor - 'Window Estimate' B18 / B19 / B20.
+   * Per-PANE rates by floor — 'Window Estimate' B18 / B19 / B20.
    *
    * Note the second-floor rate is about height, not access method. BPWC works
-   * second-story glass with a water-fed pole wherever possible and actively
+   * second-storey glass with a water-fed pole wherever possible and actively
    * avoids ladders, so a second-floor pane over a roof costs the same as any
    * other second-floor pane. Don't describe this to customers as "ladder work".
    */
   perPaneByFloor: {
-    ground: 6, // B18 - 1st floor
-    second: 10, // B19 - 2nd floor
-    third: 20, // B20 - 3rd floor
+    ground: 6, // B18 — 1st floor
+    second: 10, // B19 — 2nd floor
+    third: 20, // B20 — 3rd floor
   },
 
-  /** 'Window Estimate' B28 - sliding glass doors / large fixed panes, per panel. */
+  /** 'Window Estimate' B28 — sliding glass doors / large fixed panes, per panel. */
   perSlidingDoorPanel: 10,
 
-  /** 'Window Estimate' B25 - louvers (jalousies), per set. Very common on Oahu. */
+  /** 'Window Estimate' B25 — louvers (jalousies), per set. Very common on Oahu. */
   perLouverSet: 18,
 
   /**
-   * 'Window Estimate' B23 - per pane.
+   * 'Window Estimate' B23 — per pane.
    *
    * This is about INTERIOR height: any pane needing a step stool or ladder on
    * the INSIDE of the house. Includes small transom panes sitting above other
@@ -67,28 +71,28 @@ export const PRICING = {
    */
   perHighInteriorPane: 18,
 
-  /** Glass railings, per railing. Austin, 2026-08-24 - not in workbook v4.1. */
+  /** Glass railings, per railing. Austin, 2026-08-24 — not in workbook v4.1. */
   perGlassRailing: 10,
 
-  /** 'Window Estimate' B29 / Controls!B39 - solar panels, flat per panel. */
+  /** 'Window Estimate' B29 / Controls!B39 — solar panels, flat per panel. */
   perSolarPanel: 9,
 
-  /** Controls!B40 - glass restoration (hard water), per pane. */
+  /** Controls!B40 — glass restoration (hard water), per pane. */
   perHardWaterPane: 250,
 
   /**
-   * NOTE ON SCREENS - deliberately NOT charged here.
+   * NOTE ON SCREENS — deliberately NOT charged here.
    *
    * Full Service already includes screens, frames and tracks (price book
    * WIN-FS). The workbook's $3 "screens that clip from outside" line (B26) is a
-   * genuine edge case - Austin: "rare, old plantation style homes, maybe 10% of
+   * genuine edge case — Austin: "rare, old plantation style homes, maybe 10% of
    * estimates." Charging it by default would inflate 90% of quotes, so it's
    * left to the estimator to add after photos.
    */
 
   /**
    * Quoted-range width, as a fraction either side of the point estimate.
-   * 0.15 gives a $400 estimate displayed as "$340 - $460".
+   * 0.15 → a $400 estimate displays as "$340 – $460".
    *
    * Now that customers give us panes directly, the input is far more accurate
    * than the old windows-based guess, so this is tighter than the 0.20 the
@@ -99,14 +103,16 @@ export const PRICING = {
   /**
    * There is deliberately NO "range with photos" setting.
    *
-   * Austin, 2026-08-24: photos produce a 100% accurate and FINAL quote - not a
+   * Austin, 2026-08-24: photos produce a 100% accurate and FINAL quote — not a
    * narrower range. That is a much stronger promise than tightening the band,
    * and it's the engine of the whole page: the range creates the open question,
    * photos close it completely. Never soften this back into a range.
    */
 } as const
 
-/* QUOTE CALCULATION */
+/* ────────────────────────────────────────────────────────────────────────────
+ * QUOTE CALCULATION
+ * ──────────────────────────────────────────────────────────────────────────── */
 
 export interface QuoteInputs {
   service: ServiceLevel
@@ -126,7 +132,7 @@ export interface QuoteInputs {
   glassRailings: number
   /** Solar panels, if they want them cleaned. */
   solarPanels: number
-  /** First-time clean - true for essentially all ad traffic. */
+  /** First-time clean — true for essentially all ad traffic. */
   firstTime: boolean
 }
 
@@ -157,7 +163,7 @@ function round5(n: number): number {
   return Math.round(n / 5) * 5
 }
 
-/** Web equivalent of 'Window Estimate'!E32 - the sum of the line totals. */
+/** Web equivalent of 'Window Estimate'!E32 — the sum of the line totals. */
 function paneSubtotal(i: QuoteInputs): number {
   const p = PRICING
   return (
@@ -173,8 +179,8 @@ function paneSubtotal(i: QuoteInputs): number {
 
 /**
  * Mirrors the workbook:
- *   Full Service Price = Pane Subtotal x First-Time Multiplier   (E37)
- *   Exterior-Only      = Full Service x 0.7                      (E39)
+ *   Full Service Price = Pane Subtotal × First-Time Multiplier   (E37)
+ *   Exterior-Only      = Full Service × 0.7                      (E39)
  *   Minimum check      = if below Controls!B43, apply minimum    (E40)
  */
 export function calculateQuote(inputs: QuoteInputs): QuoteRange {
@@ -185,7 +191,7 @@ export function calculateQuote(inputs: QuoteInputs): QuoteRange {
   if (inputs.firstTime) price *= p.firstTimeMultiplier
   if (inputs.service === 'exterior') price *= p.exteriorOnlyFactor
 
-  // Solar is billed flat as its own line item - not subject to the exterior
+  // Solar is billed flat as its own line item — not subject to the exterior
   // factor or the first-time multiplier.
   price += inputs.solarPanels * p.perSolarPanel
 
@@ -195,16 +201,25 @@ export function calculateQuote(inputs: QuoteInputs): QuoteRange {
    * The floor applies to the QUOTED RANGE, not just the midpoint.
    *
    * Bug caught by Austin 2026-08-24: a job pricing at $276 sits above the $250
-   * minimum, but spreading 15% around it produced a low end of $235 - a number
+   * minimum, but spreading ±15% around it produced a low end of $235 — a number
    * we would never actually honour. Any displayed figure below the minimum is
    * wrong, so clamp the low end itself.
    */
   const low = Math.max(p.minimumCharge, round5(effective * (1 - p.rangeSpread)))
   const high = Math.max(low, round5(effective * (1 + p.rangeSpread)))
 
-  // "At minimum" now means the floor is what's driving the number the customer
-  // sees - either the price is under it, or the clamp has bitten.
-  const atMinimum = price > 0 && low === p.minimumCharge
+  /**
+   * "At minimum" means the JOB ITSELF prices below the floor — not merely that
+   * the clamp above trimmed the low end.
+   *
+   * Getting this wrong hid real information: 12 ground panes + 12 second-floor
+   * + 2 slider panels prices at $276, comfortably above the $250 floor, but the
+   * clamp pulled its low end to $250 and the old test fired — so the page
+   * displayed "Starting at $250" and silently dropped the $315 top of the
+   * range. A customer anchored on $250 who later hears $315 has been misled by
+   * our own UI. Show the real band whenever there is one.
+   */
+  const atMinimum = price > 0 && price < p.minimumCharge
 
   return {
     low,
@@ -219,10 +234,10 @@ export function hasEnoughInput(i: QuoteInputs): boolean {
   return paneSubtotal(i) > 0
 }
 
-/** "$340 - $460", or "Starting at $250" when the minimum is binding. */
+/** "$340 – $460", or "Starting at $250" when the minimum is binding. */
 export function formatRange(r: QuoteRange): string {
   if (r.atMinimum) return `Starting at $${r.low}`
-  return `$${r.low.toLocaleString()} - $${r.high.toLocaleString()}`
+  return `$${r.low.toLocaleString()} – $${r.high.toLocaleString()}`
 }
 
 /**
@@ -246,7 +261,7 @@ export function quoteBreakdown(i: QuoteInputs): string[] {
   if (i.solarPanels > 0) out.push(`${i.solarPanels} solar panels`)
   out.push(
     i.service === 'full'
-      ? 'Full Service - inside, outside, screens, frames & tracks'
+      ? 'Full Service — inside, outside, screens, frames & tracks'
       : 'Exterior only'
   )
   return out
@@ -255,7 +270,7 @@ export function quoteBreakdown(i: QuoteInputs): string[] {
 /**
  * The real photo instructions, lifted verbatim from the LSA auto-reply that
  * BPWC already sends (LSA_Auto-Reply_Build_Spec.md). Reused here so the
- * landing page asks for photos the same way the text message does - same
+ * landing page asks for photos the same way the text message does — same
  * words, same expectations, no retraining customers mid-funnel.
  */
 export const PHOTO_INSTRUCTIONS = {
@@ -265,13 +280,13 @@ export const PHOTO_INSTRUCTIONS = {
     "Any windows you can't see from outside, just grab one from inside",
   ],
   reassurance:
-    "Most customers finish this in under 2 minutes. It doesn't have to be perfect - just enough for us to see.",
+    "Most customers finish this in under 2 minutes. It doesn't have to be perfect — just enough for us to see.",
   why: 'Photos are the fastest way to get an accurate quote and get you on the schedule right away.',
   /**
-   * The promise that closes the loop. Photos don't narrow the range - they
+   * The promise that closes the loop. Photos don't narrow the range — they
    * replace it with a firm number. Keep this wording strong.
    */
-  outcome: 'Your photos get you a final, exact price - no range, no walkthrough, no waiting.',
+  outcome: 'Your photos get you a final, exact price — no range, no walkthrough, no waiting.',
   /** SMS-specific: MMS drops large batches. Not needed for web upload. */
   smsNote:
     'Texting them instead? Send the photos one at a time so they come through properly.',
@@ -280,7 +295,7 @@ export const PHOTO_INSTRUCTIONS = {
 } as const
 
 /**
- * Maintenance plan pricing - Controls!B14:B17. The "it gets cheaper if you stay
+ * Maintenance plan pricing — Controls!B14:B17. The "it gets cheaper if you stay
  * on a schedule" upsell BPWC already advertises.
  */
 export const MAINTENANCE_PLANS = [
