@@ -261,14 +261,26 @@ export default function LandingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) throw new Error('submit failed')
+
+      /**
+       * The API now returns 502 `lead_not_delivered` when a submission could
+       * not be persisted AND could not be delivered to anyone — i.e. the lead
+       * genuinely does not exist anywhere. In that case we must NOT show a
+       * confirmation screen or fire a conversion; we tell them to call.
+       */
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.message || 'submit failed')
+      }
       // Fire once, only after the submission actually succeeds.
       fireEstimateConversion()
       fireMetaLead()
       setDone(true)
-    } catch {
+    } catch (err) {
       setError(
-        `Something went wrong sending that. Please call or text us at ${PHONE_DISPLAY} and we'll sort it out.`
+        err instanceof Error && err.message !== 'submit failed'
+          ? err.message
+          : `Something went wrong sending that. Please call or text us at ${PHONE_DISPLAY} and we'll sort it out.`
       )
     } finally {
       setSending(false)
