@@ -15,6 +15,11 @@ import {
   formatRange,
   hasEnoughInput,
   quoteBreakdown,
+  planQuote,
+  planSavesMoney,
+  formatPlanRange,
+  MAINTENANCE_PLANS,
+  MAX_PLAN_DISCOUNT,
   PRICING,
   PHOTO_INSTRUCTIONS,
   EMPTY_QUOTE,
@@ -517,6 +522,51 @@ export default function LandingPage() {
                     equipment and crew time for any visit.
                   </p>
                 )}
+
+                {/*
+                  Maintenance plans.
+
+                  The point of this block is the word "immediate": the discount
+                  lands on THIS clean, not on some future visit. Showing the
+                  real discounted dollars for each cadence is what makes it
+                  persuasive — a bare "save up to 20%" is a slogan, "$310 – $420
+                  becomes $250 – $335" is an offer.
+
+                  Rendered only when the discount survives the minimum charge
+                  (see planSavesMoney), otherwise every row would read $250 and
+                  the calculator would look broken.
+                */}
+                {planSavesMoney(quote) && (
+                  <div className="mt-5 rounded-xl bg-sky-50 p-4 text-left">
+                    <p className="text-sm font-semibold text-slate-900">
+                      Save up to {Math.round(MAX_PLAN_DISCOUNT * 100)}% with a
+                      maintenance plan
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      The discount applies to this first clean — just tell us
+                      you want a schedule when we send your exact price.
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {MAINTENANCE_PLANS.map((plan) => (
+                        <li
+                          key={plan.id}
+                          className="flex items-baseline justify-between gap-3 text-xs"
+                        >
+                          <span className="text-slate-600">
+                            {plan.label}
+                            <span className="ml-1.5 rounded bg-white px-1.5 py-0.5 font-semibold text-sky-700">
+                              −{Math.round(plan.discount * 100)}%
+                            </span>
+                          </span>
+                          <span className="font-semibold tabular-nums text-slate-900">
+                            {formatPlanRange(planQuote(quote, plan.discount))}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <button
                   onClick={() => scrollTo(formRef)}
                   className="mt-5 w-full rounded-xl bg-sky-600 px-6 py-4 text-base font-semibold text-white transition hover:bg-sky-500"
