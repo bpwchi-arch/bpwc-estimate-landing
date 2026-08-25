@@ -137,3 +137,50 @@ export const uploadPhotoMemory = (
 export const getPhotoFromMemory = (photoId: string) => {
   return memoryStore.get(photoId)
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * DURABLE LEAD RECORDS
+ *
+ * Why this exists: this app has no database. Before 2026-08-25 the ONLY record
+ * of a lead was the notification itself — Zapier, Slack, email. Every one of
+ * those is guarded and silently no-ops when unconfigured, and they were all
+ * wrapped in Promise.allSettled, so /api/submit-estimate returned 200 even when
+ * a lead reached precisely nobody. The customer saw "Got it!", the Google Ads
+ * conversion fired, and the lead evaporated with no trace anywhere.
+ *
+ * Now every submission is written to object storage FIRST, before any
+ * notification is attempted. Notifications become a delivery convenience rather
+ * than the system of record. If every channel is down, the lead is still on
+ * disk and recoverable.
+ *
+ * NOTE ON RETENTION: written under the `leads/` prefix deliberately. The
+ * lifecycle rule above auto-deletes `uploads/` after 30 days; `leads/` is not
+ * covered by it and is kept indefinitely. Do not widen that rule's prefix.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export const persistLeadRecord = async (
+  leadId: string,
+  record: unknown
+): Promise<string | null> => {
+  const client = getStorageClient()
+  const bucketName = getBucketName()
+  if (!client || !bucketName) {
+    console.warn('[Lead] Storage not configured — cannot persist lead record')
+    return null
+  }
+
+  // Date-partitioned so the bucket stays browsable as volume grows.
+  const day = new Date().toISOString().slice(0, 10)
+  const key = `leads/${day}/${leadId}.json`
+
+  await client.send(new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    Body: JSON.stringify(record, null, 2),
+    ContentType: 'application/json',
+    // Never cache a lead record.
+    CacheControl: 'no-store'
+  }))
+
+  return key
+}
