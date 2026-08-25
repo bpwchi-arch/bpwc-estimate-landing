@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
-import { isStorageConfigured, uploadPhoto, uploadPhotoMemory, getPhotoFromMemory, applyLifecycleRule } from './lib/storage.js'
+import { isStorageConfigured, uploadPhoto, uploadPhotoMemory, getPhotoFromMemory, applyLifecycleRule, persistLeadRecord } from './lib/storage.js'
 import { notifySlack, notifyTeamEmail, sendCustomerConfirmation, sendSmsViaClickSend, type SubmissionData } from './lib/notifications.js'
 
 const app = express()
@@ -169,35 +169,135 @@ app.post('/api/submit-estimate', async (req, res) => {
       submittedAt: new Date().toISOString()
     }
 
+    const leadId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+
     console.log(
-      '[Submission] Processing for:',
-      submissionData.name,
+      `[Submission] ${leadId} — ${submissionData.name}`,
       hasPhotos
         ? `— ${submissionData.photoCount} photo(s)`
         : '— NO photos (customer texting them instead)'
     )
 
-    // Fire all notifications in parallel — none block the response
-    const notifications = await Promise.allSettled([
-      // 1. Zapier webhook (existing — routes to whatever you have wired there)
-      sendToZapier(submissionData),
-      // 2. Direct Slack notification to #new-estimates
-      notifySlack(submissionData),
-      // 3. Internal team email
-      notifyTeamEmail(submissionData),
-      // 4. Customer confirmation email
-      sendCustomerConfirmation(submissionData)
-    ])
+    /* ── STEP 1: PERSIST BEFORE ANYTHING ELSE ──────────────────────────────
+     *
+     * The lead is written to durable storage before a single notification is
+     * attempted. This is the whole point of the rewrite: notifications are a
+     * convenience, storage is the system of record. If every channel is down,
+     * the lead still exists and is recoverable from the bucket.
+     */
+    let persistedKey: string | null = null
+    try {
+      persistedKey = await persistLeadRecord(leadId, { leadId, ...submissionData })
+      if (persistedKey) console.log(`[Lead] ${leadId} persisted → ${persistedKey}`)
+    } catch (err) {
+      console.error(`[Lead] ${leadId} PERSIST FAILED:`, err)
+    }
 
-    notifications.forEach((result, i) => {
-      const labels = ['Zapier', 'Slack', 'Team Email', 'Customer Email']
-      if (result.status === 'rejected') {
-        console.error(`[Submission] ${labels[i]} failed:`, result.reason)
+    /* ── STEP 2: ATTEMPT DELIVERY, AND COUNT WHAT ACTUALLY LANDED ──────────
+     *
+     * `attempted` matters as much as the promise resolving. Every notifier in
+     * lib/notifications.ts returns early and resolves successfully when its env
+     * var is missing — so a resolved promise does NOT mean a human was told.
+     * A channel only counts as delivered when it was configured AND resolved.
+     */
+    const channels = [
+      { name: 'Zapier', attempted: true, run: () => sendToZapier(submissionData) },
+      {
+        name: 'Slack',
+        attempted: !!process.env.SLACK_WEBHOOK_URL,
+        run: () => notifySlack(submissionData)
+      },
+      {
+        name: 'Team email',
+        attempted: !!(process.env.SMTP_HOST || process.env.GMAIL_USER),
+        run: () => notifyTeamEmail(submissionData)
+      },
+      {
+        name: 'Customer email',
+        attempted: !!(
+          submissionData.email && (process.env.SMTP_HOST || process.env.GMAIL_USER)
+        ),
+        run: () => sendCustomerConfirmation(submissionData)
+      }
+    ]
+
+    const results = await Promise.allSettled(channels.map(c => c.run()))
+
+    const delivered: string[] = []
+    const failed: string[] = []
+    const skipped: string[] = []
+
+    results.forEach((r, i) => {
+      const c = channels[i]
+      if (!c.attempted) {
+        skipped.push(c.name)
+      } else if (r.status === 'fulfilled') {
+        delivered.push(c.name)
+      } else {
+        failed.push(c.name)
+        console.error(`[Submission] ${leadId} ${c.name} FAILED:`, r.reason)
       }
     })
 
-    console.log('[Submission] All notifications fired for:', submissionData.name)
-    res.json({ success: true, message: 'Estimate request submitted successfully' })
+    // "Customer email" tells the customer, not us — it doesn't count as the
+    // office having been notified.
+    const notifiedUs = delivered.filter(n => n !== 'Customer email')
+
+    console.log(
+      `[Submission] ${leadId} delivered=[${notifiedUs.join(', ') || 'NONE'}] ` +
+      `failed=[${failed.join(', ') || 'none'}] skipped=[${skipped.join(', ') || 'none'}] ` +
+      `persisted=${persistedKey ? 'yes' : 'NO'}`
+    )
+
+    /* ── STEP 3: LAST-RESORT SMS ───────────────────────────────────────────
+     * Nobody was told. ClickSend is already wired for the estimate-link flow,
+     * so use it to page the owner directly rather than let this go quiet.
+     */
+    if (notifiedUs.length === 0) {
+      const owner = process.env.OWNER_ALERT_PHONE
+      if (owner) {
+        try {
+          await sendSmsViaClickSend(
+            owner,
+            `BPWC ALERT: new lead ${submissionData.name} ${submissionData.phone} ` +
+            `but ALL notification channels failed. Lead saved as ${leadId}.`
+          )
+          notifiedUs.push('Owner SMS')
+          console.log(`[Submission] ${leadId} owner SMS fallback sent`)
+        } catch (err) {
+          console.error(`[Submission] ${leadId} owner SMS fallback FAILED:`, err)
+        }
+      }
+    }
+
+    /* ── STEP 4: TELL THE TRUTH ────────────────────────────────────────────
+     *
+     * Only claim success if the lead is genuinely safe — either it's in durable
+     * storage, or a human was actually notified. If neither is true, return an
+     * error so the customer sees "call or text us" instead of a confirmation
+     * screen for a lead that no longer exists anywhere.
+     */
+    const leadIsSafe = !!persistedKey || notifiedUs.length > 0
+
+    if (!leadIsSafe) {
+      console.error(
+        `[Submission] ${leadId} LEAD LOST — nothing persisted, nobody notified. ` +
+        `Payload: ${JSON.stringify(submissionData)}`
+      )
+      return res.status(502).json({
+        error: 'lead_not_delivered',
+        message:
+          'We could not record your request. Please call or text us at (808) 207-2939.'
+      })
+    }
+
+    res.json({
+      success: true,
+      message: 'Estimate request submitted successfully',
+      leadId,
+      persisted: !!persistedKey,
+      notified: notifiedUs
+    })
   } catch (err) {
     console.error('[submit-estimate] Error:', err)
     res.status(500).json({
@@ -205,6 +305,25 @@ app.post('/api/submit-estimate', async (req, res) => {
       details: err instanceof Error ? err.message : String(err)
     })
   }
+})
+
+/**
+ * Configuration health check.
+ *
+ * Reports whether each integration is wired, never the values. Added because
+ * diagnosing the 2026-08-25 silent-lead-loss meant guessing at which env vars
+ * Vercel actually had — there was no way to look without shipping a build.
+ */
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    storage: isStorageConfigured(),          // durable lead records + photos
+    slack: !!process.env.SLACK_WEBHOOK_URL,
+    zapier: true,                            // hardcoded fallback URL, always on
+    email: !!(process.env.SMTP_HOST || process.env.GMAIL_USER),
+    clickSendSms: !!(process.env.CLICKSEND_USERNAME && process.env.CLICKSEND_API_KEY),
+    ownerAlertPhone: !!process.env.OWNER_ALERT_PHONE
+  })
 })
 
 // ─── Zapier Submission Webhook ────────────────────────────────────────────────
