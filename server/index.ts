@@ -137,7 +137,22 @@ app.post('/api/submit-estimate', async (req, res) => {
     } = req.body
 
     if (!phone) return res.status(400).json({ error: 'Phone number is required' })
-    if (!photoUrls || photoUrls.length === 0) return res.status(400).json({ error: 'At least one photo is required' })
+
+    /**
+     * Photos are NO LONGER a hard requirement.
+     *
+     * The old six-step flow forced a photo upload before the contact step, so
+     * requiring one here was safe. The landing page deliberately offers "text
+     * photos instead" — the same path the LSA auto-reply and IVR option 1 push
+     * people down — and roughly matches how most BPWC customers already send
+     * photos. Rejecting those submissions would drop real leads on the floor:
+     * a name, a phone number and a self-counted quote is a lead worth having,
+     * photos or not.
+     *
+     * When photos are absent the client flags it prominently in `notes` so the
+     * office knows to watch for an incoming MMS.
+     */
+    const hasPhotos = Array.isArray(photoUrls) && photoUrls.length > 0
 
     const submissionData: SubmissionData = {
       phone: phone.replace(/[\s\-\(\)]/g, ''),
@@ -154,7 +169,13 @@ app.post('/api/submit-estimate', async (req, res) => {
       submittedAt: new Date().toISOString()
     }
 
-    console.log('[Submission] Processing for:', submissionData.name, '— photos:', submissionData.photoCount)
+    console.log(
+      '[Submission] Processing for:',
+      submissionData.name,
+      hasPhotos
+        ? `— ${submissionData.photoCount} photo(s)`
+        : '— NO photos (customer texting them instead)'
+    )
 
     // Fire all notifications in parallel — none block the response
     const notifications = await Promise.allSettled([
