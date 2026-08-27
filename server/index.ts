@@ -200,23 +200,61 @@ app.post('/api/submit-estimate', async (req, res) => {
      * var is missing — so a resolved promise does NOT mean a human was told.
      * A channel only counts as delivered when it was configured AND resolved.
      */
+    /**
+     * `reachesAHuman` is the whole point of this table.
+     *
+     * ⚠️  ZAPIER IS A ROUTER, NOT A DESTINATION.
+     *
+     * Learned the hard way on 2026-08-26. Zapier's Catch Hook returns 200 the
+     * instant it accepts a payload — that only proves Zapier received it, not
+     * that any person did. The zap it feeds then does its own work, and when a
+     * downstream step fails (ours was erroring on an Outlook send), the lead
+     * stops dead inside Zapier with nobody the wiser.
+     *
+     * Because the old code counted that 200 as "delivered", the owner-SMS
+     * backstop below never fired: on paper two channels had succeeded. The lead
+     * was safe in storage but invisible to the business, which is its own kind
+     * of lost.
+     *
+     * So Zapier is still called, and still logged — but it can never on its own
+     * satisfy "somebody knows about this lead".
+     */
     const channels = [
-      { name: 'Zapier', attempted: true, run: () => sendToZapier(submissionData) },
+      {
+        name: 'Zapier',
+        attempted: true,
+        reachesAHuman: false,
+        run: () => sendToZapier(submissionData)
+      },
       {
         name: 'Slack',
         attempted: !!process.env.SLACK_WEBHOOK_URL,
+        reachesAHuman: true,
         run: () => notifySlack(submissionData)
       },
       {
+        /**
+         * Only counts when TEAM_EMAIL is actually set.
+         *
+         * notifyTeamEmail used to fall back to a hardcoded sales@bpwchi.com —
+         * an address nobody reads — so this reported "delivered" while mailing
+         * into a void. The fallback is gone; if TEAM_EMAIL is unset the channel
+         * is skipped honestly and the SMS backstop takes over.
+         */
         name: 'Team email',
-        attempted: !!(process.env.SMTP_HOST || process.env.GMAIL_USER),
+        attempted: !!(
+          process.env.TEAM_EMAIL && (process.env.SMTP_HOST || process.env.GMAIL_USER)
+        ),
+        reachesAHuman: true,
         run: () => notifyTeamEmail(submissionData)
       },
       {
+        // Tells the CUSTOMER, not us — never counts as the office being told.
         name: 'Customer email',
         attempted: !!(
           submissionData.email && (process.env.SMTP_HOST || process.env.GMAIL_USER)
         ),
+        reachesAHuman: false,
         run: () => sendCustomerConfirmation(submissionData)
       }
     ]
@@ -239,12 +277,19 @@ app.post('/api/submit-estimate', async (req, res) => {
       }
     })
 
-    // "Customer email" tells the customer, not us — it doesn't count as the
-    // office having been notified.
-    const notifiedUs = delivered.filter(n => n !== 'Customer email')
+    /**
+     * The only list that matters: channels that both succeeded AND put this
+     * lead in front of a person. Zapier and the customer confirmation are
+     * deliberately excluded — see the `reachesAHuman` note above.
+     */
+    const humanChannels = new Set(
+      channels.filter(c => c.reachesAHuman).map(c => c.name)
+    )
+    const notifiedUs = delivered.filter(n => humanChannels.has(n))
 
     console.log(
-      `[Submission] ${leadId} delivered=[${notifiedUs.join(', ') || 'NONE'}] ` +
+      `[Submission] ${leadId} humanNotified=[${notifiedUs.join(', ') || 'NONE'}] ` +
+      `alsoDelivered=[${delivered.filter(n => !humanChannels.has(n)).join(', ') || 'none'}] ` +
       `failed=[${failed.join(', ') || 'none'}] skipped=[${skipped.join(', ') || 'none'}] ` +
       `persisted=${persistedKey ? 'yes' : 'NO'}`
     )
@@ -257,16 +302,37 @@ app.post('/api/submit-estimate', async (req, res) => {
       const owner = process.env.OWNER_ALERT_PHONE
       if (owner) {
         try {
-          await sendSmsViaClickSend(
+          /**
+           * sendSmsViaClickSend RETURNS FALSE on failure — it does not throw.
+           *
+           * The old code awaited it and then pushed 'Owner SMS' unconditionally,
+           * so a rejected ClickSend request still counted as the owner having
+           * been paged. Same silent-success family as the Slack and team-email
+           * bugs; this was the last line of defence, which made it the worst
+           * place to have it.
+           */
+          const sent = await sendSmsViaClickSend(
             owner,
-            `BPWC ALERT: new lead ${submissionData.name} ${submissionData.phone} ` +
-            `but ALL notification channels failed. Lead saved as ${leadId}.`
+            `BPWC ALERT — new lead nobody was notified about.\n` +
+            `${submissionData.name} ${submissionData.phone}\n` +
+            `${submissionData.address || 'no address given'}\n` +
+            `Saved as ${leadId}. Check R2 leads/ or the site inbox.`
           )
-          notifiedUs.push('Owner SMS')
-          console.log(`[Submission] ${leadId} owner SMS fallback sent`)
+          if (sent) {
+            notifiedUs.push('Owner SMS')
+            console.log(`[Submission] ${leadId} owner SMS fallback sent to ${owner}`)
+          } else {
+            console.error(
+              `[Submission] ${leadId} owner SMS fallback REJECTED by ClickSend`
+            )
+          }
         } catch (err) {
-          console.error(`[Submission] ${leadId} owner SMS fallback FAILED:`, err)
+          console.error(`[Submission] ${leadId} owner SMS fallback THREW:`, err)
         }
+      } else {
+        console.error(
+          `[Submission] ${leadId} no human was notified and OWNER_ALERT_PHONE is unset`
+        )
       }
     }
 
@@ -315,14 +381,43 @@ app.post('/api/submit-estimate', async (req, res) => {
  * Vercel actually had — there was no way to look without shipping a build.
  */
 app.get('/api/health', (_req, res) => {
+  const smtp = !!(process.env.SMTP_HOST || process.env.GMAIL_USER)
+  const slack = !!process.env.SLACK_WEBHOOK_URL
+  const teamEmail = !!(process.env.TEAM_EMAIL && smtp)
+  const ownerSms = !!(
+    process.env.CLICKSEND_USERNAME &&
+    process.env.CLICKSEND_API_KEY &&
+    process.env.OWNER_ALERT_PHONE
+  )
+
+  /**
+   * The question this endpoint exists to answer is NOT "are lots of things
+   * configured" — it's "if a lead arrives right now, will a person find out?"
+   *
+   * Zapier is excluded on purpose: it accepts payloads and returns 200 without
+   * proving a human saw anything. On 2026-08-26 the old health check reported
+   * a healthy-looking row of trues while team email was pointed at an address
+   * nobody reads and Slack was off — so nothing reached anyone.
+   */
+  const humanChannels = { slack, teamEmail, ownerSms }
+  const canReachAHuman = slack || teamEmail || ownerSms
+
   res.json({
     ok: true,
-    storage: isStorageConfigured(),          // durable lead records + photos
-    slack: !!process.env.SLACK_WEBHOOK_URL,
-    zapier: true,                            // hardcoded fallback URL, always on
-    email: !!(process.env.SMTP_HOST || process.env.GMAIL_USER),
+    canReachAHuman,
+    humanChannels,
+    // Lead survives even with zero notifications — this is the real safety net.
+    storage: isStorageConfigured(),
+    // Router, not a destination. Never counts toward canReachAHuman.
+    zapier: true,
+    smtp,
     clickSendSms: !!(process.env.CLICKSEND_USERNAME && process.env.CLICKSEND_API_KEY),
-    ownerAlertPhone: !!process.env.OWNER_ALERT_PHONE
+    ownerAlertPhone: !!process.env.OWNER_ALERT_PHONE,
+    warnings: [
+      !canReachAHuman && 'NO human notification channel is configured — leads will only exist in storage.',
+      smtp && !process.env.TEAM_EMAIL && 'SMTP is configured but TEAM_EMAIL is unset — team email will be skipped.',
+      !isStorageConfigured() && 'Storage is NOT configured — a lead could be lost entirely.'
+    ].filter(Boolean)
   })
 })
 
