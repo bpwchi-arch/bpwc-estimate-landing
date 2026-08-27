@@ -84,20 +84,30 @@ export async function notifySlack(data: SubmissionData): Promise<void> {
     ]
   }
 
-  try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) {
-      console.error('[Slack] Webhook failed:', res.status, await res.text())
-    } else {
-      console.log('[Slack] Notification sent for:', data.name)
-    }
-  } catch (err) {
-    console.error('[Slack] Error sending notification:', err)
+  /**
+   * ⚠️  THROWS ON FAILURE — DO NOT WRAP THIS IN A SWALLOWING try/catch.
+   *
+   * Slack is the channel Austin actually watches, so a silent failure here is
+   * the worst case in the whole notification path: the office believes it is
+   * being alerted while nothing arrives.
+   *
+   * This previously caught the error, logged it, and returned normally — and a
+   * non-2xx response only got a console.error. Either way the promise resolved,
+   * the caller counted it as delivered, and the owner-SMS backstop stayed
+   * asleep. A dead webhook URL would have failed exactly this quietly.
+   */
+  const res = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Slack webhook returned ${res.status}: ${body.slice(0, 200)}`)
   }
+
+  console.log('[Slack] Notification sent for:', data.name)
 }
 
 // ─── Email to Blue Pacific ────────────────────────────────────────────────────
@@ -142,17 +152,43 @@ export async function notifyTeamEmail(data: SubmissionData): Promise<void> {
   </div>
 </div>`
 
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@bluepacificwindowcleaning.com',
-      to: process.env.TEAM_EMAIL || 'sales@bpwchi.com',
-      subject: `New Estimate Request — ${data.name} (${data.services})`,
-      html
-    })
-    console.log('[Email] Team notification sent for:', data.name)
-  } catch (err) {
-    console.error('[Email] Failed to send team email:', err)
+  /**
+   * ⚠️  NO HARDCODED FALLBACK RECIPIENT, AND NO SWALLOWED ERRORS.
+   *
+   * Both of those bit us on 2026-08-26 and they compounded each other:
+   *
+   *  1. This used to fall back to a hardcoded `sales@bpwchi.com` when TEAM_EMAIL
+   *     was unset. TEAM_EMAIL happens to be set (to that same address), so this
+   *     particular fallback never fired in production — but a silent default
+   *     recipient is a loaded gun: unset the var and mail quietly reroutes to an
+   *     address the code author chose, still reporting success.
+   *
+   *  2. The catch block logged and then returned normally, so even a hard SMTP
+   *     failure resolved as fulfilled. The caller counts a resolved promise as
+   *     delivered, so a bounced email still read as "the office was told".
+   *
+   * Together they meant the submit endpoint could report a lead delivered when
+   * literally nobody had received anything. Throwing is the honest behaviour:
+   * the caller records the failure and escalates to the owner-SMS backstop.
+   */
+  const to = process.env.TEAM_EMAIL
+  if (!to) {
+    throw new Error(
+      'TEAM_EMAIL is not set — refusing to send to a hardcoded address. ' +
+      'Set TEAM_EMAIL so team notifications reach a real inbox.'
+    )
   }
+
+  await transporter.sendMail({
+    from:
+      process.env.SMTP_FROM ||
+      process.env.GMAIL_USER ||
+      'noreply@bluepacificwindowcleaning.com',
+    to,
+    subject: `New Estimate Request — ${data.name} (${data.services})`,
+    html
+  })
+  console.log('[Email] Team notification sent to', to, 'for:', data.name)
 }
 
 // ─── Confirmation Email to Customer ──────────────────────────────────────────
