@@ -54,14 +54,28 @@ export function trackCallIntent(): void {
 }
 
 /**
- * Micro-event: user chose to text photos rather than dial. This is the path we
- * actively want - the IVR's option 1 sends this same instruction text anyway,
- * so texting skips a phone tree and gets photos moving sooner.
+ * SECONDARY conversion action: "LP - Text photos clicked" (created 2026-08-26).
+ *
+ * Marked *secondary* in Google Ads, so it is deliberately excluded from the
+ * "Conversions" column and is NOT used for bidding optimisation. It exists
+ * purely so engagement is readable in days rather than the 2–3 weeks a real
+ * conversion rate needs at ~15–20 clicks/week.
+ *
+ * ⚠️  A bare gtag('event', 'text_photos_click', …) — which is what this used to
+ * fire — reaches nothing. Google Ads only records an event as a conversion when
+ * it is sent as `event: 'conversion'` with a `send_to` label. The old GA4-style
+ * call looked like tracking and recorded nothing anywhere, because there is no
+ * GA4 property on this page. Keep the send_to.
+ *
+ * No `value` is sent on purpose: a fake $1 would pollute conversion-value
+ * reporting for a click that is not revenue.
  */
+const TEXT_PHOTOS_LABEL = 'AW-921629287/PkJICL7tzegcEOfku7cD'
+
 export function trackTextPhotos(source: 'call_sheet' | 'form'): void {
   if (typeof window.gtag === 'function') {
-    window.gtag('event', 'text_photos_click', {
-      event_category: 'engagement',
+    window.gtag('event', 'conversion', {
+      send_to: TEXT_PHOTOS_LABEL,
       event_label: source,
     })
   }
