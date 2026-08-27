@@ -39,67 +39,69 @@ export function fireMetaLead(): void {
 }
 
 /**
- * Micro-event (not a conversion): user tapped a call button and was shown the
- * "text photos instead" sheet. Measures call INTENT, which at BPWC's traffic
- * volume accumulates far faster than actual conversions and is one of the few
- * signals readable on a weekly basis.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  ENGAGEMENT MICRO-CONVERSIONS  (all SECONDARY in Google Ads)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ *  Every one of these is registered as a *secondary* conversion action: excluded
+ *  from the "Conversions" column and NOT used for bidding optimisation. They
+ *  exist so engagement is readable in days rather than the 2–3 weeks a real
+ *  conversion rate needs at ~15–20 clicks/week.
+ *
+ *  ⚠️  THEY MUST BE SENT AS `event: 'conversion'` WITH A `send_to` LABEL.
+ *
+ *  Until 2026-08-26 these fired as bare GA4-style events —
+ *  gtag('event', 'call_intent', { event_category… }) — which recorded NOTHING,
+ *  anywhere. There is no GA4 property on this site, and Google Ads only counts
+ *  an event when it carries a conversion label. They looked like tracking and
+ *  were dead code for months. If you add another micro-event, create the
+ *  conversion action first and put its label here.
+ *
+ *  No `value` is sent on purpose: a fake $1 would pollute conversion-value
+ *  reporting for clicks that are not revenue.
  */
-export function trackCallIntent(): void {
-  if (typeof window.gtag === 'function') {
-    window.gtag('event', 'call_intent', {
-      event_category: 'engagement',
-      event_label: 'call_sheet_opened',
-    })
-  }
-}
+const LABELS = {
+  /** Call button tapped → "text photos instead" sheet shown. */
+  callIntent: 'AW-921629287/SJ7eCIXq2OgcEOfku7cD',
+  /** Chose to dial anyway after seeing the sheet. */
+  callPlaced: 'AW-921629287/-HrjCIjq2OgcEOfku7cD',
+  /** Desktop visitor sent the estimate link to their phone. */
+  sendToPhone: 'AW-921629287/Y06NCIvq2OgcEOfku7cD',
+  /** Chose to text photos — the path we actively want. */
+  textPhotos: 'AW-921629287/PkJICL7tzegcEOfku7cD',
+} as const
 
-/**
- * SECONDARY conversion action: "LP - Text photos clicked" (created 2026-08-26).
- *
- * Marked *secondary* in Google Ads, so it is deliberately excluded from the
- * "Conversions" column and is NOT used for bidding optimisation. It exists
- * purely so engagement is readable in days rather than the 2–3 weeks a real
- * conversion rate needs at ~15–20 clicks/week.
- *
- * ⚠️  A bare gtag('event', 'text_photos_click', …) — which is what this used to
- * fire — reaches nothing. Google Ads only records an event as a conversion when
- * it is sent as `event: 'conversion'` with a `send_to` label. The old GA4-style
- * call looked like tracking and recorded nothing anywhere, because there is no
- * GA4 property on this page. Keep the send_to.
- *
- * No `value` is sent on purpose: a fake $1 would pollute conversion-value
- * reporting for a click that is not revenue.
- */
-const TEXT_PHOTOS_LABEL = 'AW-921629287/PkJICL7tzegcEOfku7cD'
-
-export function trackTextPhotos(source: 'call_sheet' | 'form'): void {
+function fireMicroConversion(label: string, context: string): void {
   if (typeof window.gtag === 'function') {
     window.gtag('event', 'conversion', {
-      send_to: TEXT_PHOTOS_LABEL,
-      event_label: source,
-    })
-  }
-}
-
-/** Micro-event: user chose to dial anyway after seeing the sheet. */
-export function trackCallPlaced(): void {
-  if (typeof window.gtag === 'function') {
-    window.gtag('event', 'call_placed', {
-      event_category: 'engagement',
-      event_label: 'from_call_sheet',
+      send_to: label,
+      event_label: context,
     })
   }
 }
 
 /**
- * Micro-event (not a conversion): user tapped "Send This To My Phone".
- * Used to understand how many desktop users hand off to mobile.
+ * Call INTENT — the sheet opened, before any dial. At BPWC's volume this
+ * accumulates far faster than real conversions.
  */
+export function trackCallIntent(): void {
+  fireMicroConversion(LABELS.callIntent, 'call_sheet_opened')
+}
+
+/**
+ * Chose to text photos rather than dial — the path we actively want, since the
+ * IVR's option 1 sends this same instruction text anyway.
+ */
+export function trackTextPhotos(source: 'call_sheet' | 'form'): void {
+  fireMicroConversion(LABELS.textPhotos, source)
+}
+
+/** Chose to dial anyway after seeing the sheet. */
+export function trackCallPlaced(): void {
+  fireMicroConversion(LABELS.callPlaced, 'from_call_sheet')
+}
+
+/** Desktop visitor tapped "Send This To My Phone" — a handoff to mobile. */
 export function trackSendToPhone(): void {
-  if (typeof window.gtag === 'function') {
-    window.gtag('event', 'send_to_phone_click', {
-      event_category: 'engagement',
-      event_label: 'estimate_handoff',
-    })
-  }
+  fireMicroConversion(LABELS.sendToPhone, 'estimate_handoff')
 }
