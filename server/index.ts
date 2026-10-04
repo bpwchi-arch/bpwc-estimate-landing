@@ -2,7 +2,17 @@ import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
 import { isStorageConfigured, uploadPhoto, uploadPhotoMemory, getPhotoFromMemory, applyLifecycleRule, persistLeadRecord } from './lib/storage.js'
-import { notifySlack, notifyTeamEmail, sendCustomerConfirmation, sendSmsViaClickSend, type SubmissionData } from './lib/notifications.js'
+import {
+  notifySlack,
+  notifyTeamEmail,
+  sendCustomerConfirmation,
+  sendSmsViaClickSend,
+  isRangeAccepted,
+  formatCounts,
+  escapeHtml,
+  RANGE_ACCEPTED_HEADLINE,
+  type SubmissionData
+} from './lib/notifications.js'
 
 const app = express()
 app.use(cors({ origin: '*' }))
@@ -133,10 +143,51 @@ app.post('/api/submit-estimate', async (req, res) => {
       services,
       windowService,
       notes,
-      photoUrls
+      photoUrls,
+      intent: rawIntent,
+      preferredDays,
+      rangeText,
+      rangeLow,
+      rangeHigh,
+      counts
     } = req.body
 
     if (!phone) return res.status(400).json({ error: 'Phone number is required' })
+
+    /**
+     * `intent` distinguishes the two ways a customer leaves the calculator:
+     *   - 'exact_price'    → they will send photos for an exact price (the
+     *                        original flow; also what an absent field means)
+     *   - 'range_accepted' → they are happy with the range and want to be
+     *                        scheduled without photos. The office must be able
+     *                        to act on this one with no further questions, so it
+     *                        requires a name, an email and a service address.
+     * Anything else is treated as the original flow rather than rejected, so a
+     * stale cached bundle can never turn a real lead into an error.
+     */
+    const intent: SubmissionData['intent'] =
+      rawIntent === 'range_accepted' ? 'range_accepted' : 'exact_price'
+
+    if (intent === 'range_accepted') {
+      const emailOk = typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+      const nameOk = typeof (name || firstName) === 'string' && String(name || firstName).trim().length > 0
+      const addressOk = typeof address === 'string' && address.trim().length > 0
+      if (!nameOk || !emailOk || !addressOk) {
+        return res.status(400).json({
+          error: 'range_accepted_incomplete',
+          message: 'Please add your name, email and service address so we can schedule you.'
+        })
+      }
+    }
+
+    // Only numeric counts survive; the object is persisted and shown to staff.
+    const cleanCounts: Record<string, number> = {}
+    if (counts && typeof counts === 'object') {
+      for (const [k, v] of Object.entries(counts as Record<string, unknown>)) {
+        const n = Number(v)
+        if (/^[A-Za-z]+$/.test(k) && Number.isFinite(n) && n > 0) cleanCounts[k] = Math.floor(n)
+      }
+    }
 
     /**
      * Photos are NO LONGER a hard requirement.
@@ -166,13 +217,19 @@ app.post('/api/submit-estimate', async (req, res) => {
       notes: notes || '',
       photoUrls: photoUrls || [],
       photoCount: photoUrls?.length || 0,
-      submittedAt: new Date().toISOString()
+      submittedAt: new Date().toISOString(),
+      intent,
+      preferredDays: typeof preferredDays === 'string' ? preferredDays.trim().slice(0, 500) : '',
+      rangeText: typeof rangeText === 'string' ? rangeText.slice(0, 60) : '',
+      rangeLow: Number.isFinite(Number(rangeLow)) && rangeLow !== undefined && rangeLow !== null ? Number(rangeLow) : null,
+      rangeHigh: Number.isFinite(Number(rangeHigh)) && rangeHigh !== undefined && rangeHigh !== null ? Number(rangeHigh) : null,
+      counts: cleanCounts
     }
 
     const leadId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 
     console.log(
-      `[Submission] ${leadId} — ${submissionData.name}`,
+      `[Submission] ${leadId} — ${submissionData.name} [${intent}]`,
       hasPhotos
         ? `— ${submissionData.photoCount} photo(s)`
         : '— NO photos (customer texting them instead)'
@@ -360,6 +417,7 @@ app.post('/api/submit-estimate', async (req, res) => {
     res.json({
       success: true,
       message: 'Estimate request submitted successfully',
+      intent,
       leadId,
       persisted: !!persistedKey,
       notified: notifiedUs
@@ -449,8 +507,13 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     hour: 'numeric', minute: '2-digit', hour12: true
   })
 
+  const range = isRangeAccepted(data)
+  const countsText = formatCounts(data.counts)
+
   const summaryText = [
-    `New Estimate Request — ${data.name}`,
+    range
+      ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name}`
+      : `New Estimate Request — ${data.name}`,
     ``,
     `Name:     ${data.name}`,
     `Phone:    ${data.phone}`,
@@ -458,10 +521,13 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     `Address:  ${data.address || 'Not provided'}`,
     `Service:  ${serviceLabel}`,
     windowPref ? `Windows:  ${windowPref}` : '',
+    range ? `Range:    ${data.rangeText}` : '',
+    range && countsText ? `Counts:   ${countsText}` : '',
+    range ? `Days:     ${data.preferredDays || 'None given'}` : '',
     data.notes ? `Notes:    ${data.notes}` : '',
     ``,
-    `Photos (${data.photoCount}):`,
-    photoListText,
+    range ? `Photos:   None (booking at the range)` : `Photos (${data.photoCount}):`,
+    range ? '' : photoListText,
     ``,
     `Submitted: ${submittedHST} HST`
   ].filter(line => line !== undefined && !(line === '' && false)).join('\n')
@@ -481,6 +547,18 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     photo_count: data.photoCount,
     submitted_at: submittedHST + ' HST',
 
+    // Lead routing. The zap should branch / title on these. `headline` is
+    // already the exact first line to use in Slack and email subjects.
+    intent: data.intent,
+    lead_type: range ? 'range_accepted' : 'exact_price',
+    headline: range ? RANGE_ACCEPTED_HEADLINE : 'New Estimate Request',
+    preferred_days: data.preferredDays,
+    range_text: data.rangeText,
+    range_low: data.rangeLow,
+    range_high: data.rangeHigh,
+    counts_text: countsText,
+    counts_json: JSON.stringify(data.counts),
+
     // Individual photo URLs (photo_1, photo_2, …)
     ...photoFields,
 
@@ -488,16 +566,19 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     summary: summaryText,
 
     // HTML version for Zapier email steps
-    summary_html: `
+    summary_html: `${range ? `<p style="font-family:sans-serif;font-size:16px;font-weight:700;color:#0369a1;margin:0 0 8px">${RANGE_ACCEPTED_HEADLINE}</p>` : ''}
 <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;max-width:600px">
-  <tr><td style="padding:6px 12px 6px 0;color:#555;width:120px"><b>Name</b></td><td style="padding:6px 0">${data.name}</td></tr>
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Phone</b></td><td style="padding:6px 0">${data.phone}</td></tr>
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Email</b></td><td style="padding:6px 0">${data.email || '—'}</td></tr>
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Address</b></td><td style="padding:6px 0">${data.address || '—'}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555;width:120px"><b>Name</b></td><td style="padding:6px 0">${escapeHtml(data.name)}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Phone</b></td><td style="padding:6px 0">${escapeHtml(data.phone)}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Email</b></td><td style="padding:6px 0">${escapeHtml(data.email) || '—'}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Address</b></td><td style="padding:6px 0">${escapeHtml(data.address) || '—'}</td></tr>
+  ${range ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Accepted range</b></td><td style="padding:6px 0">${escapeHtml(data.rangeText)}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Counts</b></td><td style="padding:6px 0">${escapeHtml(countsText) || '—'}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Preferred days</b></td><td style="padding:6px 0">${escapeHtml(data.preferredDays) || '—'}</td></tr>` : ''}
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Service</b></td><td style="padding:6px 0">${serviceLabel}</td></tr>
   ${windowPref ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Windows</b></td><td style="padding:6px 0">${windowPref}</td></tr>` : ''}
-  ${data.notes ? `<tr><td style="padding:6px 12px 6px 0;color:#555;vertical-align:top"><b>Notes</b></td><td style="padding:6px 0">${data.notes}</td></tr>` : ''}
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Photos</b></td><td style="padding:6px 0">${data.photoUrls.map((u, i) => `<a href="${u}">Photo ${i + 1}</a>`).join(' &nbsp;·&nbsp; ')}</td></tr>
+  ${data.notes ? `<tr><td style="padding:6px 12px 6px 0;color:#555;vertical-align:top"><b>Notes</b></td><td style="padding:6px 0;white-space:pre-line">${escapeHtml(data.notes)}</td></tr>` : ''}
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Photos</b></td><td style="padding:6px 0">${range ? 'None (booking at the range)' : data.photoUrls.map((u, i) => `<a href="${u}">Photo ${i + 1}</a>`).join(' &nbsp;·&nbsp; ')}</td></tr>
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Submitted</b></td><td style="padding:6px 0">${submittedHST} HST</td></tr>
 </table>`
   }
