@@ -20,7 +20,52 @@ export interface SubmissionData {
   photoUrls: string[]
   photoCount: number
   submittedAt: string
+  /**
+   * What the customer asked for. 'range_accepted' = they are happy with the
+   * price range the calculator showed and want to be scheduled without sending
+   * photos. 'exact_price' (the default, and what every submission before
+   * 2026-10-04 was) = they want photos turned into an exact price.
+   */
+  intent: 'exact_price' | 'range_accepted'
+  /** Free text: preferred days or dates (range_accepted only). */
+  preferredDays: string
+  /** The range the customer saw and accepted, e.g. "$340 – $460". */
+  rangeText: string
+  rangeLow: number | null
+  rangeHigh: number | null
+  /** Pane / panel counts the range was built from (range_accepted only). */
+  counts: Record<string, number>
 }
+
+export const RANGE_ACCEPTED_HEADLINE = 'RANGE ACCEPTED — ready to schedule'
+
+export const isRangeAccepted = (d: Pick<SubmissionData, 'intent'>): boolean =>
+  d.intent === 'range_accepted'
+
+/** Human labels for the counts object, in the order the office reads them. */
+const COUNT_LABELS: [string, string][] = [
+  ['groundPanes', 'Ground-floor panes'],
+  ['secondFloorPanes', '2nd-floor panes'],
+  ['thirdFloorPanes', '3rd-floor panes'],
+  ['slidingDoorPanels', 'Sliding door panels'],
+  ['louverSets', 'Louver sets'],
+  ['highInteriorPanes', 'High interior panes'],
+  ['glassRailings', 'Glass railings'],
+  ['solarPanels', 'Solar panels'],
+]
+
+/** "Ground-floor panes: 12 · 2nd-floor panes: 8 …" — only non-zero counts. */
+export function formatCounts(counts: Record<string, number>): string {
+  return COUNT_LABELS.filter(([k]) => (counts?.[k] ?? 0) > 0)
+    .map(([k, label]) => `${label}: ${counts[k]}`)
+    .join(' · ')
+}
+
+/** Escape user-supplied text before it goes into an HTML email / Zapier HTML. */
+export const escapeHtml = (s: string): string =>
+  String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
+  )
 
 // ─── Slack ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +89,9 @@ export async function notifySlack(data: SubmissionData): Promise<void> {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${serviceEmoji} New Estimate Request — ${data.name}`,
+          text: isRangeAccepted(data)
+            ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name}`
+            : `${serviceEmoji} New Estimate Request — ${data.name}`,
           emoji: true
         }
       },
@@ -56,9 +103,19 @@ export async function notifySlack(data: SubmissionData): Promise<void> {
           { type: 'mrkdwn', text: `*Email:*\n${data.email}` },
           { type: 'mrkdwn', text: `*Address:*\n${data.address || '_Not provided_'}` },
           { type: 'mrkdwn', text: `*Services:*\n${data.services}` },
-          { type: 'mrkdwn', text: `*Photos:*\n${data.photoCount} submitted` }
+          { type: 'mrkdwn', text: isRangeAccepted(data) ? `*Photos:*\nNone (booking at the range)` : `*Photos:*\n${data.photoCount} submitted` }
         ]
       },
+      ...(isRangeAccepted(data) ? [{
+        type: 'section' as const,
+        text: {
+          type: 'mrkdwn' as const,
+          text:
+            `*Accepted range:* ${data.rangeText}\n` +
+            `*Counts:* ${formatCounts(data.counts) || '_see notes_'}\n` +
+            `*Preferred days:* ${data.preferredDays || '_none given_'}`
+        }
+      }] : []),
       ...(data.windowService ? [{
         type: 'section' as const,
         text: { type: 'mrkdwn' as const, text: `*Window Preference:* ${data.windowService}` }
@@ -130,18 +187,21 @@ export async function notifyTeamEmail(data: SubmissionData): Promise<void> {
   const html = `
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#0369a1;padding:24px;border-radius:8px 8px 0 0">
-    <h1 style="color:white;margin:0;font-size:20px">🪟 New Estimate Request</h1>
+    <h1 style="color:white;margin:0;font-size:20px">${isRangeAccepted(data) ? RANGE_ACCEPTED_HEADLINE : '🪟 New Estimate Request'}</h1>
   </div>
   <div style="background:#f0f9ff;padding:24px;border:1px solid #bae6fd;border-top:none;border-radius:0 0 8px 8px">
     <table style="width:100%;border-collapse:collapse">
-      <tr><td style="padding:8px 0;color:#64748b;width:120px">Name</td><td style="padding:8px 0;font-weight:600">${data.name}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Phone</td><td style="padding:8px 0">${data.phone}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Email</td><td style="padding:8px 0">${data.email}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Address</td><td style="padding:8px 0">${data.address || 'Not provided'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;width:120px">Name</td><td style="padding:8px 0;font-weight:600">${escapeHtml(data.name)}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">Phone</td><td style="padding:8px 0">${escapeHtml(data.phone)}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">Email</td><td style="padding:8px 0">${escapeHtml(data.email)}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">Address</td><td style="padding:8px 0">${escapeHtml(data.address) || 'Not provided'}</td></tr>
+      ${isRangeAccepted(data) ? `<tr><td style="padding:8px 0;color:#64748b">Accepted range</td><td style="padding:8px 0;font-weight:600">${escapeHtml(data.rangeText)}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">Counts</td><td style="padding:8px 0">${escapeHtml(formatCounts(data.counts)) || 'See notes'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b">Preferred days</td><td style="padding:8px 0">${escapeHtml(data.preferredDays) || 'None given'}</td></tr>` : ''}
       <tr><td style="padding:8px 0;color:#64748b">Services</td><td style="padding:8px 0">${data.services}</td></tr>
       ${data.windowService ? `<tr><td style="padding:8px 0;color:#64748b">Window Pref</td><td style="padding:8px 0">${data.windowService}</td></tr>` : ''}
-      <tr><td style="padding:8px 0;color:#64748b">Photos</td><td style="padding:8px 0">${data.photoCount} submitted</td></tr>
-      ${data.notes ? `<tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Notes</td><td style="padding:8px 0">${data.notes}</td></tr>` : ''}
+      <tr><td style="padding:8px 0;color:#64748b">Photos</td><td style="padding:8px 0">${isRangeAccepted(data) ? 'None (booking at the range)' : `${data.photoCount} submitted`}</td></tr>
+      ${data.notes ? `<tr><td style="padding:8px 0;color:#64748b;vertical-align:top">Notes</td><td style="padding:8px 0;white-space:pre-line">${escapeHtml(data.notes)}</td></tr>` : ''}
     </table>
     ${data.photoUrls.length > 0 ? `
     <div style="margin-top:20px">
@@ -185,7 +245,9 @@ export async function notifyTeamEmail(data: SubmissionData): Promise<void> {
       process.env.GMAIL_USER ||
       'noreply@bluepacificwindowcleaning.com',
     to,
-    subject: `New Estimate Request — ${data.name} (${data.services})`,
+    subject: isRangeAccepted(data)
+      ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name} (${data.rangeText})`
+      : `New Estimate Request — ${data.name} (${data.services})`,
     html
   })
   console.log('[Email] Team notification sent to', to, 'for:', data.name)
@@ -209,8 +271,29 @@ export async function sendCustomerConfirmation(data: SubmissionData): Promise<vo
   }
 
   const firstName = data.firstName || data.name.split(' ')[0] || 'there'
+  const range = isRangeAccepted(data)
 
-  const html = `
+  const html = range ? `
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:#0369a1;padding:32px 24px;border-radius:8px 8px 0 0;text-align:center">
+    <h1 style="color:white;margin:0;font-size:22px">Blue Pacific Window Cleaning</h1>
+    <p style="color:#bae6fd;margin:8px 0 0">Serving Oʻahu</p>
+  </div>
+  <div style="background:white;padding:32px 24px;border:1px solid #e0f2fe;border-top:none;border-radius:0 0 8px 8px">
+    <h2 style="color:#0c4a6e;margin-top:0">Thanks, ${escapeHtml(firstName)}! We've got your request.</h2>
+    <p style="color:#334155;line-height:1.6">
+      Our office will reach out shortly with your estimate and available dates.
+      Your price will fall within the range shown (${escapeHtml(data.rangeText)}), confirmed against your window count.
+    </p>
+    <p style="color:#334155;line-height:1.6">
+      Questions? Reply to this email or text us at (808) 207-2939.
+    </p>
+    <hr style="border:none;border-top:1px solid #e0f2fe;margin:32px 0">
+    <p style="color:#64748b;font-size:13px;margin:0;text-align:center">
+      Blue Pacific Window Cleaning · Detail-focused window cleaning for Oʻahu homes
+    </p>
+  </div>
+</div>` : `
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#0369a1;padding:32px 24px;border-radius:8px 8px 0 0;text-align:center">
     <h1 style="color:white;margin:0;font-size:22px">Blue Pacific Window Cleaning</h1>
@@ -244,7 +327,9 @@ export async function sendCustomerConfirmation(data: SubmissionData): Promise<vo
     await transporter.sendMail({
       from: `Blue Pacific Window Cleaning <${process.env.SMTP_FROM || process.env.GMAIL_USER || 'sales@bpwchi.com'}>`,
       to: data.email,
-      subject: `We received your estimate request, ${firstName} 👍`,
+      subject: range
+        ? `We received your scheduling request, ${firstName}`
+        : `We received your estimate request, ${firstName} 👍`,
       html
     })
     console.log('[Email] Customer confirmation sent to:', data.email)
