@@ -179,6 +179,13 @@ export default function LandingPage() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+  const [email, setEmail] = useState('')
+  const [preferredDays, setPreferredDays] = useState('')
+  const [scheduleNote, setScheduleNote] = useState('')
+  // True once the customer taps "I'm happy with this range — schedule me".
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  // Which flow produced the confirmation screen.
+  const [doneIntent, setDoneIntent] = useState<'exact_price' | 'range_accepted'>('exact_price')
   const [photos, setPhotos] = useState<File[]>([])
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
@@ -188,6 +195,7 @@ export default function LandingPage() {
 
   const calcRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLDivElement>(null)
+  const scheduleRef = useRef<HTMLDivElement>(null)
 
   /**
    * Every call button opens this sheet rather than dialling straight away.
@@ -242,6 +250,7 @@ export default function LandingPage() {
       const textingPhotos = photoUrls.length === 0
 
       const payload = {
+        intent: 'exact_price',
         name,
         phone,
         address,
@@ -290,6 +299,125 @@ export default function LandingPage() {
     } finally {
       setSending(false)
     }
+  }
+
+  /**
+   * "I'm happy with this range — schedule me."
+   *
+   * The customer books at the range with NO photos. Their counts, service
+   * level and the exact range they saw travel with the lead, so the office can
+   * build a range estimate and offer dates without asking anything twice.
+   *
+   * Goes through the SAME endpoint, persist-first and notify path as the
+   * exact-price form (see server/index.ts) — only `intent` differs. The two
+   * conversion events fire once, only after the API says the lead is safe.
+   */
+  const openSchedule = () => {
+    setError('')
+    setScheduleOpen(true)
+    // Wait a tick so the section exists before we scroll to it.
+    setTimeout(() => scrollTo(scheduleRef), 50)
+  }
+
+  const openExactPrice = () => {
+    setError('')
+    setScheduleOpen(false)
+    setTimeout(() => scrollTo(formRef), 50)
+  }
+
+  const submitRange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (sending) return
+    if (!name.trim()) return setError('Please add your name')
+    if (phone.replace(/\D/g, '').length < 10)
+      return setError('Please add a mobile number we can text')
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      return setError('Please add a valid email address')
+    if (!address.trim()) return setError('Please add the service address')
+    setError('')
+    setSending(true)
+
+    try {
+      const rangeText = formatRange(quote)
+      const payload = {
+        intent: 'range_accepted',
+        name,
+        phone,
+        email: email.trim(),
+        address,
+        preferredDays: preferredDays.trim(),
+        services: ['windows'],
+        windowService:
+          q.service === 'full' ? 'interior-exterior' : 'exterior-only',
+        rangeText,
+        rangeLow: quote.low,
+        rangeHigh: quote.high,
+        // Every count the range was built from; nothing for the customer to retype.
+        counts: {
+          groundPanes: q.groundPanes,
+          secondFloorPanes: q.secondFloorPanes,
+          thirdFloorPanes: q.thirdFloorPanes,
+          slidingDoorPanels: q.slidingDoorPanels,
+          louverSets: q.louverSets,
+          highInteriorPanes: q.highInteriorPanes,
+          glassRailings: q.glassRailings,
+          solarPanels: q.solarPanels,
+        },
+        notes: [
+          `RANGE ACCEPTED — customer is happy with the range shown (${rangeText}) and wants to be scheduled. No photos sent.`,
+          `Service: ${q.service === 'full' ? 'Full service (inside + outside)' : 'Exterior only'}`,
+          ...quoteBreakdown(q).map((l) => `  • ${l}`),
+          preferredDays.trim() ? `Preferred days: ${preferredDays.trim()}` : '',
+          scheduleNote.trim() ? `Customer note: ${scheduleNote.trim()}` : '',
+          '(Range from customer-entered counts. Build a range estimate and offer open dates.)',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        photoUrls: [] as string[],
+      }
+
+      const res = await fetch('/api/submit-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.message || 'submit failed')
+      }
+      // Fire once, only after the submission actually succeeds.
+      fireEstimateConversion()
+      fireMetaLead()
+      setDoneIntent('range_accepted')
+      setDone(true)
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message !== 'submit failed'
+          ? err.message
+          : `Something went wrong sending that. Please call or text us at ${PHONE_DISPLAY} and we'll sort it out.`
+      )
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (done && doneIntent === 'range_accepted') {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <Check className="h-8 w-8 text-green-700" />
+        </div>
+        <h1 className="mt-6 text-3xl font-bold text-slate-900">
+          Thanks, {name.trim().split(' ')[0]}!
+        </h1>
+        <p className="mt-3 text-lg text-slate-600">
+          We&rsquo;ve got your request. Our office will reach out shortly with
+          your estimate and available dates. Your price will fall within the
+          range shown, confirmed against your window count.
+        </p>
+      </div>
+    )
   }
 
   if (done) {
@@ -567,12 +695,21 @@ export default function LandingPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => scrollTo(formRef)}
-                  className="mt-5 w-full rounded-xl bg-sky-600 px-6 py-4 text-base font-semibold text-white transition hover:bg-sky-500"
-                >
-                  Get my exact price
-                </button>
+                {/* Two ways forward, equal weight (Austin 2026-10-04). */}
+                <div className="mt-5 grid gap-3">
+                  <button
+                    onClick={openExactPrice}
+                    className="w-full rounded-xl bg-sky-600 px-6 py-4 text-base font-semibold text-white transition hover:bg-sky-500"
+                  >
+                    Get my exact price
+                  </button>
+                  <button
+                    onClick={openSchedule}
+                    className="w-full rounded-xl bg-emerald-600 px-6 py-4 text-base font-semibold text-white transition hover:bg-emerald-500"
+                  >
+                    I&rsquo;m happy with this range &mdash; schedule me
+                  </button>
+                </div>
               </>
             ) : (
               <p className="mt-2 text-sm text-slate-500">
@@ -583,8 +720,100 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Schedule at the range — revealed by the second button ────────── */}
+      {priced && scheduleOpen && (
+        <section ref={scheduleRef} className="bg-white px-4 py-14 sm:py-16">
+          <div className="mx-auto max-w-lg">
+            <h2 className="text-center text-3xl font-bold text-slate-900">
+              Schedule me at this range
+            </h2>
+            <p className="mt-2 text-center text-slate-600">
+              {quote.atMinimum ? 'Your price starts at' : 'Your range of'}{' '}
+              <strong className="text-slate-900">
+                {quote.atMinimum ? `$${quote.low}` : formatRange(quote)}
+              </strong>
+              , and your window counts are already included. Just tell us where
+              and how to reach you.
+            </p>
+
+            <form onSubmit={submitRange} className="mt-6 space-y-3">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Mobile number"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email address"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Service address"
+                autoComplete="street-address"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <input
+                value={preferredDays}
+                onChange={(e) => setPreferredDays(e.target.value)}
+                placeholder="Preferred days or dates (optional)"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+              <textarea
+                value={scheduleNote}
+                onChange={(e) => setScheduleNote(e.target.value)}
+                placeholder="Anything we should know? (optional)"
+                rows={3}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+
+              {error && (
+                <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={sending}
+                className="w-full rounded-xl bg-emerald-600 px-6 py-4 text-base font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+              >
+                {sending ? 'Sending…' : 'Schedule me'}
+              </button>
+              <p className="text-center text-xs text-slate-500">
+                No payment now. We&rsquo;ll confirm your price against your
+                window count before anything is booked.
+              </p>
+              <button
+                type="button"
+                onClick={openExactPrice}
+                className="w-full text-center text-sm font-medium text-sky-700 underline"
+              >
+                Rather send photos for an exact price?
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
+
       {/* ── Contact — only exists once a price does ──────────────────────── */}
-      {priced && (
+      {priced && !scheduleOpen && (
         <section ref={formRef} className="bg-white px-4 py-14 sm:py-16">
           <div className="mx-auto max-w-lg">
             <h2 className="text-center text-3xl font-bold text-slate-900">
