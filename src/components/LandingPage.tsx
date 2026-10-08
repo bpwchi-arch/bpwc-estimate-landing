@@ -15,12 +15,13 @@ import {
   formatRange,
   hasEnoughInput,
   quoteBreakdown,
+  quoteCounts,
+  MINIMUM_DISCLAIMER,
   planQuote,
   planSavesMoney,
   formatPlanRange,
   MAINTENANCE_PLANS,
   MAX_PLAN_DISCOUNT,
-  PRICING,
   PHOTO_INSTRUCTIONS,
   EMPTY_QUOTE,
   type QuoteInputs,
@@ -249,6 +250,7 @@ export default function LandingPage() {
 
       const textingPhotos = photoUrls.length === 0
 
+      const rangeText = formatRange(quote)
       const payload = {
         intent: 'exact_price',
         name,
@@ -257,9 +259,15 @@ export default function LandingPage() {
         services: ['windows'],
         windowService:
           q.service === 'full' ? 'interior-exterior' : 'exterior-only',
+        rangeText,
+        rangeLow: quote.low,
+        rangeHigh: quote.high,
+        // Same structured counts as range_accepted — the office needs floors on every lead.
+        counts: quoteCounts(q),
         notes: [
-          `Customer's own count → ${formatRange(quote)}`,
+          `Customer's own count → ${rangeText}`,
           ...quoteBreakdown(q).map((l) => `  • ${l}`),
+          quote.atMinimum ? `Shown to customer: "${MINIMUM_DISCLAIMER}"` : '',
           '(Estimate from customer-entered counts. Confirm against photos.)',
           textingPhotos
             ? '⚠️ NO PHOTOS UPLOADED — customer chose to text them instead. Watch for an MMS from this number.'
@@ -353,20 +361,12 @@ export default function LandingPage() {
         rangeLow: quote.low,
         rangeHigh: quote.high,
         // Every count the range was built from; nothing for the customer to retype.
-        counts: {
-          groundPanes: q.groundPanes,
-          secondFloorPanes: q.secondFloorPanes,
-          thirdFloorPanes: q.thirdFloorPanes,
-          slidingDoorPanels: q.slidingDoorPanels,
-          louverSets: q.louverSets,
-          highInteriorPanes: q.highInteriorPanes,
-          glassRailings: q.glassRailings,
-          solarPanels: q.solarPanels,
-        },
+        counts: quoteCounts(q),
         notes: [
           `RANGE ACCEPTED — customer is happy with the range shown (${rangeText}) and wants to be scheduled. No photos sent.`,
           `Service: ${q.service === 'full' ? 'Full service (inside + outside)' : 'Exterior only'}`,
           ...quoteBreakdown(q).map((l) => `  • ${l}`),
+          quote.atMinimum ? `Shown to customer: "${MINIMUM_DISCLAIMER}"` : '',
           preferredDays.trim() ? `Preferred days: ${preferredDays.trim()}` : '',
           scheduleNote.trim() ? `Customer note: ${scheduleNote.trim()}` : '',
           '(Range from customer-entered counts. Build a range estimate and offer open dates.)',
@@ -638,7 +638,7 @@ export default function LandingPage() {
             {priced ? (
               <>
                 <ul className="mt-3 space-y-0.5">
-                  {quoteBreakdown(q).map((l) => (
+                  {quoteBreakdown(q, 'customer').map((l) => (
                     <li key={l} className="text-xs text-slate-600">
                       {l}
                     </li>
@@ -646,8 +646,7 @@ export default function LandingPage() {
                 </ul>
                 {quote.atMinimum && (
                   <p className="mt-2 text-xs text-slate-500">
-                    Our ${PRICING.minimumCharge} minimum covers travel,
-                    equipment and crew time for any visit.
+                    {MINIMUM_DISCLAIMER}
                   </p>
                 )}
 
@@ -735,6 +734,11 @@ export default function LandingPage() {
               , and your window counts are already included. Just tell us where
               and how to reach you.
             </p>
+            {quote.atMinimum && (
+              <p className="mt-2 text-center text-sm text-slate-500">
+                {MINIMUM_DISCLAIMER}
+              </p>
+            )}
 
             <form onSubmit={submitRange} className="mt-6 space-y-3">
               <input
