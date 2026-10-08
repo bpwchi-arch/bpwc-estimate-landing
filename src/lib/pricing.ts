@@ -241,13 +241,38 @@ export function formatRange(r: QuoteRange): string {
 }
 
 /**
+ * Shown under "Starting at $250" (atMinimum) on the site, and copied into the
+ * lead notes so the office sees exactly what the customer saw.
+ * Austin, 2026-10-07: at the minimum, water spots / hard-water stains are not
+ * included.
+ */
+export const MINIMUM_DISCLAIMER =
+  `This is our $${PRICING.minimumCharge} minimum service. It covers standard window cleaning; ` +
+  "removing water spots or hard-water stains isn't included. Send a few photos and " +
+  "we'll confirm everything before your cleaning."
+
+/**
  * Plain-language recap of what was counted, so the number feels earned rather
  * than generated. Shows the counts, not the per-pane arithmetic.
+ *
+ * `office` (the default) lists each floor on its own line — the office prices
+ * floors at different rates, so a combined "8 panes of glass" is unpriceable
+ * (Bernard Garcia Cacho, 2026-10-07). `customer` keeps a single total for the
+ * on-screen recap.
  */
-export function quoteBreakdown(i: QuoteInputs): string[] {
+export function quoteBreakdown(
+  i: QuoteInputs,
+  audience: 'office' | 'customer' = 'office'
+): string[] {
   const out: string[] = []
-  const panes = i.groundPanes + i.secondFloorPanes + i.thirdFloorPanes
-  if (panes > 0) out.push(`${panes} pane${panes === 1 ? '' : 's'} of glass`)
+  if (audience === 'customer') {
+    const panes = i.groundPanes + i.secondFloorPanes + i.thirdFloorPanes
+    if (panes > 0) out.push(`${panes} pane${panes === 1 ? '' : 's'} of glass`)
+  } else {
+    if (i.groundPanes > 0) out.push(`Ground-floor panes: ${i.groundPanes}`)
+    if (i.secondFloorPanes > 0) out.push(`2nd-floor panes: ${i.secondFloorPanes}`)
+    if (i.thirdFloorPanes > 0) out.push(`3rd-floor panes: ${i.thirdFloorPanes}`)
+  }
   if (i.slidingDoorPanels > 0)
     out.push(
       `${i.slidingDoorPanels} sliding door panel${i.slidingDoorPanels === 1 ? '' : 's'}`
@@ -265,6 +290,23 @@ export function quoteBreakdown(i: QuoteInputs): string[] {
       : 'Exterior only'
   )
   return out
+}
+
+/**
+ * The structured counts object sent with EVERY lead (server formats it into
+ * the "Counts:" line). Keys must match COUNT_LABELS in server/lib/notifications.ts.
+ */
+export function quoteCounts(i: QuoteInputs): Record<string, number> {
+  return {
+    groundPanes: i.groundPanes,
+    secondFloorPanes: i.secondFloorPanes,
+    thirdFloorPanes: i.thirdFloorPanes,
+    slidingDoorPanels: i.slidingDoorPanels,
+    louverSets: i.louverSets,
+    highInteriorPanes: i.highInteriorPanes,
+    glassRailings: i.glassRailings,
+    solarPanels: i.solarPanels,
+  }
 }
 
 /**
