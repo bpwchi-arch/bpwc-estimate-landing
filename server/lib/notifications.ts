@@ -42,6 +42,30 @@ export const RANGE_ACCEPTED_HEADLINE = 'RANGE ACCEPTED — ready to schedule'
 export const isRangeAccepted = (d: Pick<SubmissionData, 'intent'>): boolean =>
   d.intent === 'range_accepted'
 
+/**
+ * First line of every lead post in #new-estimates (via zap 377898169), so the
+ * office can tell lead types apart at a glance. Austin, 2026-10-07.
+ * The Google Ads lead-form variant ("GOOGLE ADS FORM") is set in the zap,
+ * because those leads never touch this server.
+ */
+export type LeadTypeKey = 'website_photos' | 'website_own_count' | 'website_range_accepted'
+
+export function leadTypeKey(d: Pick<SubmissionData, 'intent' | 'photoCount'>): LeadTypeKey {
+  if (d.intent === 'range_accepted') return 'website_range_accepted'
+  return d.photoCount > 0 ? 'website_photos' : 'website_own_count'
+}
+
+export function leadTypeHeadline(d: Pick<SubmissionData, 'intent' | 'photoCount'>): string {
+  switch (leadTypeKey(d)) {
+    case 'website_range_accepted':
+      return 'WEBSITE · RANGE ACCEPTED · NO PHOTOS'
+    case 'website_photos':
+      return `WEBSITE · PHOTOS (${d.photoCount})`
+    default:
+      return 'WEBSITE · OWN COUNT · NO PHOTOS — watch Quo for MMS'
+  }
+}
+
 /** Human labels for the counts object, in the order the office reads them. */
 const COUNT_LABELS: [string, string][] = [
   ['groundPanes', 'Ground-floor panes'],
@@ -89,9 +113,7 @@ export async function notifySlack(data: SubmissionData): Promise<void> {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: isRangeAccepted(data)
-            ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name}`
-            : `${serviceEmoji} New Estimate Request — ${data.name}`,
+          text: `${serviceEmoji} ${leadTypeHeadline(data)} — ${data.name}`,
           emoji: true
         }
       },
