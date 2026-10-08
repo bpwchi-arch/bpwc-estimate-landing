@@ -10,7 +10,8 @@ import {
   isRangeAccepted,
   formatCounts,
   escapeHtml,
-  RANGE_ACCEPTED_HEADLINE,
+  leadTypeHeadline,
+  leadTypeKey,
   type SubmissionData
 } from './lib/notifications.js'
 
@@ -510,10 +511,12 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
   const range = isRangeAccepted(data)
   const countsText = formatCounts(data.counts)
 
+  const headline = leadTypeHeadline(data)
+  // Always present so the zap's "Counts:" line is never blank.
+  const countsLine = countsText || 'Not counted (photos only)'
+
   const summaryText = [
-    range
-      ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name}`
-      : `New Estimate Request — ${data.name}`,
+    `${headline} — ${data.name}`,
     ``,
     `Name:     ${data.name}`,
     `Phone:    ${data.phone}`,
@@ -521,8 +524,8 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     `Address:  ${data.address || 'Not provided'}`,
     `Service:  ${serviceLabel}`,
     windowPref ? `Windows:  ${windowPref}` : '',
-    range ? `Range:    ${data.rangeText}` : '',
-    range && countsText ? `Counts:   ${countsText}` : '',
+    data.rangeText ? `Range:    ${data.rangeText}` : '',
+    `Counts:   ${countsLine}`,
     range ? `Days:     ${data.preferredDays || 'None given'}` : '',
     data.notes ? `Notes:    ${data.notes}` : '',
     ``,
@@ -550,13 +553,27 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     // Lead routing. The zap should branch / title on these. `headline` is
     // already the exact first line to use in Slack and email subjects.
     intent: data.intent,
+    // `lead_type` keeps its original two values in case a zap step filters on it.
     lead_type: range ? 'range_accepted' : 'exact_price',
-    headline: range ? RANGE_ACCEPTED_HEADLINE : 'New Estimate Request',
+    // Fine-grained type + the exact first line for the #new-estimates post.
+    lead_type_key: leadTypeKey(data),
+    headline,
+    /**
+     * Starting value of the "Auto-text:" line in the #new-estimates post.
+     * Mirrors zap 377898169's filter: only own-count / no-photo website leads
+     * get the photo-request text from Quo. For those the zap edits the Slack
+     * post to "Auto-text: SENT <time> from 207-2939" once Quo accepts the send;
+     * if that step fails, this "status unknown" line is what stays visible.
+     */
+    auto_text_line:
+      leadTypeKey(data) === 'website_own_count'
+        ? 'Auto-text: status unknown, check Quo'
+        : 'Auto-text: NOT SENT, text them by hand',
     preferred_days: data.preferredDays,
     range_text: data.rangeText,
     range_low: data.rangeLow,
     range_high: data.rangeHigh,
-    counts_text: countsText,
+    counts_text: countsLine,
     counts_json: JSON.stringify(data.counts),
 
     // Individual photo URLs (photo_1, photo_2, …)
@@ -566,15 +583,15 @@ async function sendToZapier(data: SubmissionData): Promise<void> {
     summary: summaryText,
 
     // HTML version for Zapier email steps
-    summary_html: `${range ? `<p style="font-family:sans-serif;font-size:16px;font-weight:700;color:#0369a1;margin:0 0 8px">${RANGE_ACCEPTED_HEADLINE}</p>` : ''}
+    summary_html: `<p style="font-family:sans-serif;font-size:16px;font-weight:700;color:#0369a1;margin:0 0 8px">${escapeHtml(headline)}</p>
 <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;max-width:600px">
   <tr><td style="padding:6px 12px 6px 0;color:#555;width:120px"><b>Name</b></td><td style="padding:6px 0">${escapeHtml(data.name)}</td></tr>
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Phone</b></td><td style="padding:6px 0">${escapeHtml(data.phone)}</td></tr>
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Email</b></td><td style="padding:6px 0">${escapeHtml(data.email) || '—'}</td></tr>
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Address</b></td><td style="padding:6px 0">${escapeHtml(data.address) || '—'}</td></tr>
-  ${range ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Accepted range</b></td><td style="padding:6px 0">${escapeHtml(data.rangeText)}</td></tr>
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Counts</b></td><td style="padding:6px 0">${escapeHtml(countsText) || '—'}</td></tr>
-  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Preferred days</b></td><td style="padding:6px 0">${escapeHtml(data.preferredDays) || '—'}</td></tr>` : ''}
+  ${data.rangeText ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>${range ? 'Accepted range' : 'Range shown'}</b></td><td style="padding:6px 0">${escapeHtml(data.rangeText)}</td></tr>` : ''}
+  <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Counts</b></td><td style="padding:6px 0">${escapeHtml(countsLine)}</td></tr>
+  ${range ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Preferred days</b></td><td style="padding:6px 0">${escapeHtml(data.preferredDays) || '—'}</td></tr>` : ''}
   <tr><td style="padding:6px 12px 6px 0;color:#555"><b>Service</b></td><td style="padding:6px 0">${serviceLabel}</td></tr>
   ${windowPref ? `<tr><td style="padding:6px 12px 6px 0;color:#555"><b>Windows</b></td><td style="padding:6px 0">${windowPref}</td></tr>` : ''}
   ${data.notes ? `<tr><td style="padding:6px 12px 6px 0;color:#555;vertical-align:top"><b>Notes</b></td><td style="padding:6px 0;white-space:pre-line">${escapeHtml(data.notes)}</td></tr>` : ''}
