@@ -112,7 +112,9 @@ export function trackSendToPhone(): void {
  * ─────────────────────────────────────────────────────────────────────────────
  *
  *  A separate Google Ads conversion action from the homeowner estimate. The
- *  label is NOT hardcoded: it comes from VITE_PM_CONVERSION_LABEL at build time
+ *  label defaults to the "PM / AOAO qualified inquiry" action created 10/10/2026
+ *  (gPIHCL3KopgdEOfku7cD, secondary/observation) and can be overridden with
+ *  VITE_PM_CONVERSION_LABEL at build time
  *  so the action can be created in Google Ads first and wired without a code
  *  change. When the env var is unset the call is skipped entirely (and says so
  *  in the console) rather than firing an event with a broken send_to.
@@ -121,10 +123,13 @@ export function trackSendToPhone(): void {
  *  story) property. Tower submissions never reach the API and never fire this.
  *  Never fire the homeowner 'Lead' / estimate conversion from the PM form.
  */
+/** Google Ads conversion action "PM / AOAO qualified inquiry" (AW-921629287), created 2026-10-10. */
+const PM_CONVERSION_LABEL = 'gPIHCL3KopgdEOfku7cD'
+
 export function firePmInquiryConversion(): void {
-  const label = import.meta.env.VITE_PM_CONVERSION_LABEL as string | undefined
+  const label = (import.meta.env.VITE_PM_CONVERSION_LABEL as string | undefined) || PM_CONVERSION_LABEL
   if (!label) {
-    console.info('[analytics] VITE_PM_CONVERSION_LABEL is not set — skipping Google Ads PM conversion')
+    console.info('[analytics] no PM conversion label — skipping Google Ads PM conversion')
   } else if (typeof window.gtag === 'function') {
     window.gtag('event', 'conversion', { send_to: `AW-921629287/${label}` })
   }
