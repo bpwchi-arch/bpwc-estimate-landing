@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Check, ClipboardList, Mail, Phone, ShieldCheck, Mountain, Calculator } from 'lucide-react'
 import { LOGO_SRC } from '@/logoData'
 import { firePmInquiryConversion } from '@/lib/analytics'
@@ -50,6 +50,7 @@ const INPUT =
 const LABEL = 'block text-sm font-semibold text-slate-800'
 
 export default function PropertyManagersPage() {
+  useEffect(() => { document.title = 'Window Cleaning for Property Managers & AOAOs | Blue Pacific Window Cleaning' }, [])
   const formRef = useRef<HTMLDivElement>(null)
 
   const [role, setRole] = useState<string>('')

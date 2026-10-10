@@ -167,7 +167,7 @@ export default function CommunityPage({ slug }: { slug: string }) {
             {[
               ['Pick your floor plan', 'Every unit of the same plan pays the same fixed price.'],
               ['Pick a community day', 'The crew does the whole community in one trip, so the price can be lower.'],
-              ['The discount grows as neighbours join', 'Shown live below. It is applied as its own line on your invoice.'],
+              ['The discount grows as neighbors join', 'Shown live below. It is applied as its own line on your invoice.'],
             ].map(([t, b], i) => (
               <li key={t} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-sm font-bold text-white">

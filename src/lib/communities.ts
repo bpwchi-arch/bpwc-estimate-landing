@@ -2,7 +2,7 @@
  * Community group-rate program — ONE config shared by client and server.
  *
  * Each community gets an unlisted sign-up page at /community/<slug>. Owners
- * pick a floor plan and a service, and the group discount grows as neighbours
+ * pick a floor plan and a service, and the group discount grows as neighbors
  * join. This file is the single source of truth for every community's floor
  * plans, prices, days and discount tiers.
  *
@@ -85,7 +85,7 @@ export const COMMUNITIES: Community[] = [
     intro:
       'Blue Pacific is offering Pohakea Gardens owners a group rate on window cleaning. ' +
       'Every owner of the same floor plan pays the same fixed price, and the discount grows ' +
-      'as more of your neighbours sign up for the same day.',
+      'as more of your neighbors sign up for the same day.',
     // No days are invented. The page says community days are announced once
     // the first owners sign up; add real dates here when they are set.
     days: [],
