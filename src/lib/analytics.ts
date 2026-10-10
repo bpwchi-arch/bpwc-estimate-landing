@@ -105,3 +105,30 @@ export function trackCallPlaced(): void {
 export function trackSendToPhone(): void {
   fireMicroConversion(LABELS.sendToPhone, 'estimate_handoff')
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  PROPERTY-MANAGER INQUIRY  (/property-managers)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ *  A separate Google Ads conversion action from the homeowner estimate. The
+ *  label is NOT hardcoded: it comes from VITE_PM_CONVERSION_LABEL at build time
+ *  so the action can be created in Google Ads first and wired without a code
+ *  change. When the env var is unset the call is skipped entirely (and says so
+ *  in the console) rather than firing an event with a broken send_to.
+ *
+ *  Call ONCE, only after /api/pm-inquiry returns ok for a QUALIFIED (1–4
+ *  story) property. Tower submissions never reach the API and never fire this.
+ *  Never fire the homeowner 'Lead' / estimate conversion from the PM form.
+ */
+export function firePmInquiryConversion(): void {
+  const label = import.meta.env.VITE_PM_CONVERSION_LABEL as string | undefined
+  if (!label) {
+    console.info('[analytics] VITE_PM_CONVERSION_LABEL is not set — skipping Google Ads PM conversion')
+  } else if (typeof window.gtag === 'function') {
+    window.gtag('event', 'conversion', { send_to: `AW-921629287/${label}` })
+  }
+  if (typeof window.fbq === 'function') {
+    window.fbq('trackCustom', 'PMInquiry')
+  }
+}
