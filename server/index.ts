@@ -434,9 +434,9 @@ app.post('/api/submit-estimate', async (req, res) => {
   }
 })
 
-// ─── Property manager / AOAO inquiry ─────────────────────────────────────────
-// /property-managers qualification form. Logic lives in lib/pm.ts. Towers
-// (5+ stories) are rejected here as a backstop; the client never posts them.
+// ─── Property manager / realtor inquiry ──────────────────────────────────────
+// /property-managers form. Logic lives in lib/pm.ts. `stories` is optional;
+// a value of 5+ is rejected as a backstop (high-rises are out of scope).
 
 app.post('/api/pm-inquiry', async (req, res) => {
   try {
