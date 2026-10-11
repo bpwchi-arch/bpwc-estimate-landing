@@ -14,6 +14,8 @@ import {
   leadTypeKey,
   type SubmissionData
 } from './lib/notifications.js'
+import { validatePmInquiry, handlePmInquiry } from './lib/pm.js'
+import { communitySummary, validateSignup, handleSignup } from './lib/community.js'
 
 const app = express()
 app.use(cors({ origin: '*' }))
@@ -429,6 +431,58 @@ app.post('/api/submit-estimate', async (req, res) => {
       error: 'Failed to submit estimate request',
       details: err instanceof Error ? err.message : String(err)
     })
+  }
+})
+
+// ─── Property manager / AOAO inquiry ─────────────────────────────────────────
+// /property-managers qualification form. Logic lives in lib/pm.ts. Towers
+// (5+ stories) are rejected here as a backstop; the client never posts them.
+
+app.post('/api/pm-inquiry', async (req, res) => {
+  try {
+    const v = validatePmInquiry((req.body ?? {}) as Record<string, unknown>)
+    if (!v.ok) return res.status(v.status).json({ error: v.error, message: v.message })
+
+    const result = await handlePmInquiry(v.record)
+    if (!result.persisted && result.notified.length === 0) {
+      // Zapier alone does not count — see the sendToZapier notes above.
+      console.error(`[PM] ${result.leadId} NOT persisted and no human notified — relying on Zapier only`)
+    }
+    res.json({ ok: true, leadId: result.leadId, track: result.track })
+  } catch (err) {
+    console.error('[pm-inquiry] Error:', err)
+    res.status(500).json({
+      error: 'Failed to submit inquiry',
+      details: err instanceof Error ? err.message : String(err)
+    })
+  }
+})
+
+// ─── Community group-rate sign-ups ───────────────────────────────────────────
+// Config: src/lib/communities.ts (shared with the client). Logic: lib/community.ts.
+
+app.get('/api/community/:slug', async (req, res) => {
+  try {
+    const summary = await communitySummary(req.params.slug)
+    if (!summary) return res.status(404).json({ error: 'unknown_community' })
+    res.set('Cache-Control', 'no-store')
+    res.json(summary)
+  } catch (err) {
+    console.error('[community] summary error:', err)
+    res.status(500).json({ error: 'Failed to load community', details: err instanceof Error ? err.message : String(err) })
+  }
+})
+
+app.post('/api/community/:slug/signup', async (req, res) => {
+  try {
+    const v = validateSignup(req.params.slug, (req.body ?? {}) as Record<string, unknown>)
+    if (!v.ok) return res.status(v.status).json({ error: v.error, message: v.message })
+
+    const { summary } = await handleSignup(v.community, v.signup)
+    res.json({ ok: true, summary })
+  } catch (err) {
+    console.error('[community] signup error:', err)
+    res.status(500).json({ error: 'Failed to sign up', details: err instanceof Error ? err.message : String(err) })
   }
 })
 

@@ -35,6 +35,12 @@ export interface SubmissionData {
   rangeHigh: number | null
   /** Pane / panel counts the range was built from (range_accepted only). */
   counts: Record<string, number>
+  /**
+   * Optional override for the first line of the Slack post / email subject.
+   * Used by non-estimate leads (property-manager inquiries, community
+   * sign-ups) whose type is not derivable from intent + photoCount.
+   */
+  headline?: string
 }
 
 export const RANGE_ACCEPTED_HEADLINE = 'RANGE ACCEPTED — ready to schedule'
@@ -113,7 +119,7 @@ export async function notifySlack(data: SubmissionData): Promise<void> {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${serviceEmoji} ${leadTypeHeadline(data)} — ${data.name}`,
+          text: `${serviceEmoji} ${data.headline ?? leadTypeHeadline(data)} — ${data.name}`,
           emoji: true
         }
       },
@@ -209,7 +215,7 @@ export async function notifyTeamEmail(data: SubmissionData): Promise<void> {
   const html = `
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#0369a1;padding:24px;border-radius:8px 8px 0 0">
-    <h1 style="color:white;margin:0;font-size:20px">${isRangeAccepted(data) ? RANGE_ACCEPTED_HEADLINE : '🪟 New Estimate Request'}</h1>
+    <h1 style="color:white;margin:0;font-size:20px">${data.headline ? escapeHtml(data.headline) : isRangeAccepted(data) ? RANGE_ACCEPTED_HEADLINE : '🪟 New Estimate Request'}</h1>
   </div>
   <div style="background:#f0f9ff;padding:24px;border:1px solid #bae6fd;border-top:none;border-radius:0 0 8px 8px">
     <table style="width:100%;border-collapse:collapse">
@@ -267,9 +273,11 @@ export async function notifyTeamEmail(data: SubmissionData): Promise<void> {
       process.env.GMAIL_USER ||
       'noreply@bluepacificwindowcleaning.com',
     to,
-    subject: isRangeAccepted(data)
-      ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name} (${data.rangeText})`
-      : `New Estimate Request — ${data.name} (${data.services})`,
+    subject: data.headline
+      ? `${data.headline} — ${data.name}`
+      : isRangeAccepted(data)
+        ? `${RANGE_ACCEPTED_HEADLINE} — ${data.name} (${data.rangeText})`
+        : `New Estimate Request — ${data.name} (${data.services})`,
     html
   })
   console.log('[Email] Team notification sent to', to, 'for:', data.name)

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, PutBucketLifecycleConfigurationCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, PutBucketLifecycleConfigurationCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 // Storage configuration - works with S3, R2, DigitalOcean Spaces, etc.
@@ -160,7 +160,13 @@ export const getPhotoFromMemory = (photoId: string) => {
 
 export const persistLeadRecord = async (
   leadId: string,
-  record: unknown
+  record: unknown,
+  /**
+   * Top-level prefix. Defaults to `leads/` (the estimate flow). Property-manager
+   * inquiries use `pm-leads/` so they never mix with homeowner estimates when
+   * someone browses the bucket. Neither prefix is touched by the lifecycle rule.
+   */
+  prefix: string = 'leads'
 ): Promise<string | null> => {
   const client = getStorageClient()
   const bucketName = getBucketName()
@@ -171,7 +177,7 @@ export const persistLeadRecord = async (
 
   // Date-partitioned so the bucket stays browsable as volume grows.
   const day = new Date().toISOString().slice(0, 10)
-  const key = `leads/${day}/${leadId}.json`
+  const key = `${prefix.replace(/\/+$/, '')}/${day}/${leadId}.json`
 
   await client.send(new PutObjectCommand({
     Bucket: bucketName,
@@ -183,4 +189,68 @@ export const persistLeadRecord = async (
   }))
 
   return key
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * GENERIC JSON RECORDS (community sign-up rosters)
+ *
+ * The community group-rate pages need to READ records back, not just write
+ * them, to show "N units have joined". `persistJson` writes one JSON object at
+ * an explicit key; `listJson` reads every object under a prefix (capped at one
+ * page of 1000 — a single community will never approach that).
+ *
+ * Both return gracefully when storage is unconfigured: persistJson returns null,
+ * listJson returns []. Callers must treat that as "empty roster", never as an
+ * error — a missing bucket must not 500 a sign-up page.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export const persistJson = async (key: string, record: unknown): Promise<string | null> => {
+  const client = getStorageClient()
+  const bucketName = getBucketName()
+  if (!client || !bucketName) {
+    console.warn(`[Storage] Not configured — cannot persist ${key}`)
+    return null
+  }
+
+  await client.send(new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    Body: JSON.stringify(record, null, 2),
+    ContentType: 'application/json',
+    CacheControl: 'no-store'
+  }))
+
+  return key
+}
+
+export const listJson = async <T = unknown>(prefix: string): Promise<T[]> => {
+  const client = getStorageClient()
+  const bucketName = getBucketName()
+  if (!client || !bucketName) {
+    console.warn(`[Storage] Not configured — listJson(${prefix}) returns empty`)
+    return []
+  }
+
+  const listed = await client.send(new ListObjectsV2Command({
+    Bucket: bucketName,
+    Prefix: prefix,
+    MaxKeys: 1000
+  }))
+
+  const keys = (listed.Contents ?? [])
+    .map(o => o.Key)
+    .filter((k): k is string => !!k && k.endsWith('.json'))
+
+  const records: (T | null)[] = await Promise.all(keys.map(async (key): Promise<T | null> => {
+    try {
+      const obj = await client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }))
+      const text = await obj.Body?.transformToString()
+      return text ? (JSON.parse(text) as T) : null
+    } catch (err) {
+      console.warn(`[Storage] listJson could not read ${key}:`, err instanceof Error ? err.message : err)
+      return null
+    }
+  }))
+
+  return records.filter((r): r is T => r !== null)
 }
