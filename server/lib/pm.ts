@@ -1,10 +1,11 @@
 /**
- * Property-manager / AOAO inquiry (POST /api/pm-inquiry).
+ * Property-manager / realtor inquiry (POST /api/pm-inquiry).
  *
- * A qualification form on /property-managers for low-rise condos, townhomes
- * and managed portfolios. These are NOT homeowner estimates: there is no price
- * range, no photos, and no auto-text. Austin calls the manager back himself
- * within one business day.
+ * The form on /property-managers for managers, realtors and owner-landlords
+ * with rental homes, condos and small portfolios. These are NOT homeowner
+ * estimates: there is no price range and no photos yet. The zap's photo-request
+ * text IS wanted for these leads (it asks for photos of the first property),
+ * and Austin calls within one business day.
  *
  * Flow mirrors /api/submit-estimate: persist first (pm-leads/), then notify.
  * Zapier is a router, not a destination — a 200 from the catch hook proves
@@ -32,9 +33,8 @@ export const submittedHST = (iso: string = new Date().toISOString()): string =>
  * Every field the #new-estimates zap (377898169) reads. Send ALL of them on
  * every post so no line of its Slack template comes out blank.
  *
- * The zap's Quo auto-text step is filtered to lead_type_key === 'website_own_count'.
- * Nothing in this file may ever send that key — these leads must not trigger a
- * customer text.
+ * lead_type_key stays 'pm_inquiry' so the zap can route these on their own
+ * branch (photo-request text for the first property, no homeowner estimate flow).
  */
 export interface ZapierLeadPayload {
   first_name: string
@@ -108,20 +108,19 @@ const int = (v: unknown): number | null => {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type PmTrack = 'contract' | 'group' | 'unknown'
+export type PmTrack = 'turnover' | 'recurring' | 'unknown'
 
 export interface PmInquiryRecord {
   leadId: string
   type: 'pm_inquiry'
   track: PmTrack
   role: string
-  propertyType: string
-  stories: number
-  buildings: number | null
-  units: number | null
+  manages: string
+  doors: number | null
   area: string
-  whoPays: string
-  propertyName: string
+  need: string
+  /** Optional backstop only; the form no longer asks. */
+  stories: number | null
   address: string
   name: string
   phone: string
@@ -134,10 +133,9 @@ export type PmValidation =
   | { ok: true; record: PmInquiryRecord }
   | { ok: false; status: number; error: string; message: string }
 
-export function trackFromWhoPays(whoPays: string): PmTrack {
-  const w = whoPays.toLowerCase()
-  if (w.startsWith('the association') || w === 'association') return 'contract'
-  if (w.startsWith('individual') || w === 'owners') return 'group'
+export function trackFromNeed(need: string): PmTrack {
+  if (need === 'Recurring schedule') return 'recurring'
+  if (need === 'Move-out or move-in turn' || need === 'Listing prep' || need === 'One-time clean') return 'turnover'
   return 'unknown'
 }
 
@@ -150,12 +148,10 @@ export function validatePmInquiry(body: Record<string, unknown>): PmValidation {
     return { ok: false, status: 400, error: 'phone_required', message: 'A phone number is required.' }
   }
 
+  // `stories` is optional now (the form no longer asks). If a value is sent
+  // and it is 5+, reject as a backstop: high-rises never become leads.
   const stories = int(body.stories)
-  if (stories === null || stories < 1) {
-    return { ok: false, status: 400, error: 'stories_required', message: 'Please tell us how many stories the buildings are.' }
-  }
-  // Backstop for the client-side rule: towers never become leads.
-  if (stories >= 5) {
+  if (stories !== null && stories >= 5) {
     return {
       ok: false,
       status: 400,
@@ -169,7 +165,7 @@ export function validatePmInquiry(body: Record<string, unknown>): PmValidation {
     return { ok: false, status: 400, error: 'email_invalid', message: 'That email address does not look right.' }
   }
 
-  const whoPays = str(body.whoPays, 60)
+  const need = str(body.need, 60)
   const leadId = `pm-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 
   return {
@@ -177,15 +173,13 @@ export function validatePmInquiry(body: Record<string, unknown>): PmValidation {
     record: {
       leadId,
       type: 'pm_inquiry',
-      track: trackFromWhoPays(whoPays),
+      track: trackFromNeed(need),
       role: str(body.role, 60),
-      propertyType: str(body.propertyType, 80),
-      stories,
-      buildings: int(body.buildings),
-      units: int(body.units),
+      manages: str(body.manages, 80),
+      doors: int(body.doors),
       area: str(body.area, 80),
-      whoPays,
-      propertyName: str(body.propertyName, 200),
+      need,
+      stories,
       address: str(body.address, 300),
       name: str(body.name, 120),
       phone,
@@ -199,38 +193,34 @@ export function validatePmInquiry(body: Record<string, unknown>): PmValidation {
 // ─── Zapier payload ───────────────────────────────────────────────────────────
 
 export function pmHeadline(r: PmInquiryRecord): string {
-  const trackLabel =
-    r.track === 'contract' ? 'ASSOCIATION CONTRACT'
-    : r.track === 'group' ? 'GROUP RATE'
-    : 'WHO-PAYS UNKNOWN'
-  return `PM / AOAO INQUIRY — NEEDS AUSTIN · ${trackLabel} · ${r.propertyName || '(property not named)'}`
+  const need = (r.need || 'need not given').toUpperCase()
+  const role = r.role || 'role not given'
+  const doors = r.doors !== null ? `${r.doors} doors` : 'doors not given'
+  return `PM / REALTOR INQUIRY — NEEDS AUSTIN · ${need} · ${role} · ${doors}`
 }
 
 export function pmCountsText(r: PmInquiryRecord): string {
-  return `${r.buildings ?? '?'} building(s) · ${r.units ?? '?'} unit(s) · ${r.stories} stories · ${r.propertyType || 'type not given'} · ${r.area || 'area not given'}`
+  return `${r.manages || 'type not given'} · ${r.doors ?? '?'} doors · ${r.area || 'area not given'} · first: ${r.address || 'no address yet'}`
 }
+
+const trackLabel = (t: PmTrack): string =>
+  t === 'recurring' ? 'Recurring schedule' : t === 'turnover' ? 'Turnover / one-time' : 'Unknown — ask on the call'
 
 export function buildPmZapierPayload(r: PmInquiryRecord): ZapierLeadPayload {
   const headline = pmHeadline(r)
   const countsText = pmCountsText(r)
   const { firstName, lastName } = splitName(r.name)
   const submitted = submittedHST(r.submittedAt)
-  const windowPref =
-    r.track === 'contract' ? 'Exterior schedule (contract)'
-    : r.track === 'group' ? 'Group day (owners sign up one by one)'
-    : 'Exterior schedule (contract) or group day'
+  const windowPref = r.need || 'Not sure'
 
   const rows: [string, string][] = [
-    ['Track', r.track === 'contract' ? 'Association contract' : r.track === 'group' ? 'Group rate program' : 'Unknown — ask who pays'],
+    ['Track', trackLabel(r.track)],
+    ['Need', r.need],
     ['Role', r.role],
-    ['Property', r.propertyName],
-    ['Address', r.address],
-    ['Property type', r.propertyType],
-    ['Stories', String(r.stories)],
-    ['Buildings', r.buildings === null ? '' : String(r.buildings)],
-    ['Units', r.units === null ? '' : String(r.units)],
+    ['Manages', r.manages],
+    ['Doors', r.doors === null ? '' : String(r.doors)],
     ['Area', r.area],
-    ['Who pays', r.whoPays],
+    ['First property', r.address],
     ['Name', r.name],
     ['Phone', r.phone],
     ['Email', r.email],
@@ -243,7 +233,7 @@ export function buildPmZapierPayload(r: PmInquiryRecord): ZapierLeadPayload {
     '',
     ...rows.map(([k, v]) => `${(k + ':').padEnd(15)}${v || '—'}`),
     '',
-    'Next step: Austin calls within 1 business day. No auto-text was sent.'
+    'Next step: photo-request text for the first property, then Austin calls within 1 business day.'
   ].join('\n')
 
   return {
@@ -254,16 +244,16 @@ export function buildPmZapierPayload(r: PmInquiryRecord): ZapierLeadPayload {
     email: r.email,
     customer_email: r.email,
     address: r.address,
-    service: 'Property manager / AOAO inquiry',
+    service: 'Property manager / realtor inquiry',
     window_preference: windowPref,
     notes: r.notes,
     photo_count: 0,
     submitted_at: submitted,
     intent: 'pm_inquiry',
     lead_type: 'pm_inquiry',
-    lead_type_key: 'pm_inquiry', // never 'website_own_count' — that key triggers the Quo auto-text
+    lead_type_key: 'pm_inquiry',
     headline,
-    auto_text_line: 'Auto-text: NOT SENT (property-manager inquiry — Austin calls within 1 business day)',
+    auto_text_line: 'Auto-text: status unknown, check Quo',
     preferred_days: '',
     range_text: '',
     range_low: '',
@@ -284,10 +274,10 @@ export function pmAsSubmission(r: PmInquiryRecord): SubmissionData {
     name: r.name || '(no name)',
     phone: r.phone,
     email: r.email,
-    address: [r.propertyName, r.address].filter(Boolean).join(' — '),
-    services: 'Property manager / AOAO inquiry',
-    windowService: r.track === 'contract' ? 'Association contract' : r.track === 'group' ? 'Group rate program' : 'Who pays: not sure',
-    notes: [pmCountsText(r), `Role: ${r.role || '—'}`, `Who pays: ${r.whoPays || '—'}`, r.notes].filter(Boolean).join('\n'),
+    address: r.address,
+    services: 'Property manager / realtor inquiry',
+    windowService: r.need || 'Not sure',
+    notes: [pmCountsText(r), `Role: ${r.role || '—'}`, `Track: ${trackLabel(r.track)}`, r.notes].filter(Boolean).join('\n'),
     photoUrls: [],
     photoCount: 0,
     submittedAt: r.submittedAt,
@@ -312,7 +302,7 @@ export interface PmResult {
 
 export async function handlePmInquiry(record: PmInquiryRecord): Promise<PmResult> {
   const { leadId } = record
-  console.log(`[PM] ${leadId} — ${record.name || '(no name)'} [${record.track}] ${record.propertyName || ''}`)
+  console.log(`[PM] ${leadId} — ${record.name || '(no name)'} [${record.track}] ${record.need || ''}`)
 
   // STEP 1: persist before anything else. Storage is the system of record.
   let persistedKey: string | null = null
