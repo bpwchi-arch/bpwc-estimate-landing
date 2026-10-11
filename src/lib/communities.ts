@@ -79,11 +79,11 @@ export const DEFAULT_MIN_MAN_HOURS_TO_HOLD_DAY = 6
 
 export const COMMUNITIES: Community[] = [
   {
-    slug: 'pohakea-gardens',
-    name: 'Pohakea Gardens',
-    area: 'Kaneohe',
+    slug: 'poha-kea-point',
+    name: 'Poha Kea Point',
+    area: 'Kaneohe (Lilipuna)',
     intro:
-      'Blue Pacific is offering Pohakea Gardens owners a group rate on window cleaning. ' +
+      'Blue Pacific is offering Poha Kea Point owners a group rate on window cleaning. ' +
       'Every owner of the same floor plan pays the same fixed price, and the discount grows ' +
       'as more of your neighbors sign up for the same day.',
     // No days are invented. The page says community days are announced once
